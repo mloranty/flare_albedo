@@ -422,16 +422,19 @@ ggsave("figures/postfire_seasonal_albedo_latitude_boreal_fix.png",
 alm.ba <- alb.lat.bin.bor%>%
   filter(month == 3) %>%
   group_by(ysf,month,lat) %>%
-  summarise(albedo = mean(albedo, na.rm = T))
+  summarise(albedo = mean(albedo, na.rm = T),
+            sd = sd(albedo, na.rm = T))
 
 alm.bj <- alb.lat.bin.bor%>%
   filter(month == 7) %>%
   group_by(ysf,month,lat) %>%
-  summarise(albedo = mean(albedo, na.rm = T))
+  summarise(albedo = mean(albedo, na.rm = T),
+            sd = sd(albedo, na.rm = T))
 
 alm.a <- alb.lat.bin.bor%>%
   group_by(ysf,lat) %>%
-  summarise(albedo = mean(albedo, na.rm = T))
+  summarise(albedo = mean(albedo, na.rm = T),
+            sd = sd(albedo, na.rm = T))
 
 sz <- 1.5
 cl <- c("#fde725", "#21918c", "#440154")
