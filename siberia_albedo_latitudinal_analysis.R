@@ -4,6 +4,9 @@
 # albedo provided from Google Earth Engine
 # by E. Webb
 #
+# see albedo_fire_preprocess.R for initial 
+# data wrangling
+#
 # MML 06/21/22
 #####################################
 
@@ -21,226 +24,10 @@ ifelse(Sys.info()[1]=="Windows",
        setwd("G:/My Drive/Documents/research/manuscripts/siberia_albedo"),
        setwd("~/Library/CloudStorage/GoogleDrive-mloranty@colgate.edu/My Drive/Documents/research/manuscripts/siberia_albedo"))
 
-# RAW DATA - THIS HAS BEEN PRE-PROCESSED, SEE COLLAPSED CODE BELOW
-# read albedo data
-#alb <- read.table("data/siberia_fire_albedo.csv", header = T, check.names = F)
-# read fire perimeter data set
-#fire <- vect("data/SiberiaFires2001-2020/SiberiaFires2001-2020.shp")
-
-
-# create time since fire date stamp for each fire 
-# create new time-since-fire albedo dataframe
-# expand to see code, otherwise skip and read alb.tsf file
-###########################################################################
-# create date/time object
-alb$tmstmp <- strptime(alb$date,format = "%F")
-
-# match albedo to fire record
-#ref <- match(colnames(alb.s),fire$UniqueId)
-ref <- match(colnames(alb),fire$UniqueId)
-
-# which columns in the data frame have matches in fire database
-r <- which(is.na(ref)==F)
-
-#fire year
-fy <- fire$FireYr[ref[r[1]]]
-
-# year since fire
-#ysf <- year(alb.s$tmstmp)-fy
-ysf <- year(alb$tmstmp)-fy
-
-# date since fire
-#alb.tsf <- data.frame(paste(ysf,month(alb.s$tmstmp), day(alb.s$tmstmp),sep = "/"))
-alb.tsf <- data.frame(paste(ysf,month(alb$tmstmp), day(alb$tmstmp),sep = "/"))
-
-# add albedo data
-alb.tsf <- cbind(alb.tsf,alb[,r[1]])
-
-#set names
-names(alb.tsf) <- c("dsf",names(alb)[r[1]])
-
-#iterate through the remaining columns and merge to a single data frame
-for(i in 2:length(r))
-{
-  fy <- fire$FireYr[ref[r[i]]]
-  ysf <- year(alb$tmstmp)-fy
-  t <- data.frame(paste(ysf,month(alb$tmstmp), day(alb$tmstmp),sep = "/"))
-  t <- cbind(t,alb[,r[i]])
-  names(t) <- c("dsf",names(alb)[r[i]])
-  alb.tsf <- merge(alb.tsf,t, by = "dsf", all = TRUE)
-}
-
-# create separate numeric variables for time since fire date info
-t <- strsplit(alb.tsf$dsf, split = "/")
-
-#year since fire
-alb.tsf$ysf <- as.numeric(sapply(t,"[[",1))
-#month
-alb.tsf$month <- as.numeric(sapply(t,"[[",2))
-#day 
-alb.tsf$day <- as.numeric(sapply(t,"[[",3))
-
-# write the output to a csv file
-write.csv(alb.tsf,file = "data/siberia_fire_albedo_tsf.csv", row.names = F, col.names = T)
-###########################################################################
-
-#### read data frame for albedo as time since fire ##
-alb.tsf <- read.csv("data/siberia_fire_albedo_tsf.csv", header = T)
-
-
-# add new variables to fire database for analysis (biome, etc.)
-# combine retrogressive thaw slump and fire data sets
-# expand to see code, otherwise skip and read updated shapefile
-###########################################################################
-
-##add biome var to fire database
-fire$biome <- ifelse(fire$EcoCode == "NST"|fire$EcoCode == "EST","Boreal","Tundra")
-
-## get centroids for fire polygons to add lat/lon
-c <- centroids(fire)
-
-#project to lat/lon
-d <- project(c,"EPSG:4326")
-
-# get coordinates
-l <- crds(d)
-
-# add latitude and longitude to fire database
-fire$lat <- l[,2]
-fire$lon <- l[,1]
-rm(c,d,l)
-
-# create dNBR dummay variable
-fire$dnbr <- -9999
-
-## read dNBR data from Anna Talucci and add to shapefile
-d <- list.files(path = "data/dnbr", pattern = ".csv", full.names = T)
-for(i in 1:length(d))
-{
-  n <- read.csv(d[i], header = T)
-  r <- match(n$UniqueId, fire$UniqueId)
-  fire$dnbr[r] <- n$mean
-}
-rm(d,n,r)
-
-# read CACK radiative kernel data set
-# transpose and correct longitude values as well
-rf <- rotate(t(rast("data/CACKv1.0/CACKv1.0.nc", "CACK")))
-# correct set latitude to correct extent
-ext(rf) <- c(-180,180,-90,90)
-#crs(rf) <- "EPSG:4326"
-# reproject fire to lat/lon in order to extract CACK data
-f2 <- project(fire,"EPSG:4326") 
-#f3 <- terra::project(rf,fire)
-# extract CACK
-frf <- terra::extract(rf,f2, "mean", method = "bilinear", bind = T) 
-
-# merge the two vectors, so we have CACK with the original un-transformed vector
-fire <- merge(fire, frf)
-
-# read Tree Cover and percent larch 
-# tree cover is from Hansen product - Landsat year 2000 (prefire)
-# larch is percent larch pixels in fire perimeter based on ESA CCI
-# both data sets provided by E. Webb, extracted in GEE
-tree <- read.csv("data/fires_treecover_larch.csv", header = T)
-
-# merger tree data with fire database
-fire <- merge(fire, tree)
-
-# write updated shapefile
-writeVector(fire, "data/SiberiaFires2001-2020/SiberiaFires2001-2020updated.shp", overwrite = T)
-writeVector(fire, "data/SiberiaFires2001-2020/SiberiaFires2001-2020updated_tree.shp", overwrite = T)
-
-# get locations of Retrogressive Thaw Slumps from Runge et al 2022
-# not this is not included in analysis
-####################################################################
-# load rts point locations (https://doi.pangaea.de/10.1594/PANGAEA.941479)
-#rts <- vect("data/RTS_NESiberia/RTS_NESiberia.shp")
-
-# reproject rts point locations
-#rts <- project(rts,fire)
-
-# use the relate function to find rts within fire perimeters
-#j <- relate(rts,fire, "within", pairs = T)
-#j <- relate(fire,rts,"contains", pairs = T)
-
-# combine data from each file - not this will be a point vector, which is OK
-#rtsf <- cbind(rts[j[,1],1:9],fire[j[,2],1:6])
-
-# calculate when RTS initiated relative to fire
-#rtsf$tsf <- rtsf$FirstYear-rtsf$FireYr
-
-# write shapefile of RTS points with fire info
-#writeVector(rtsf, "data/RTS_NESiberia/RTS_NESiberia_fire.shp", overwrite = T)
-###########################################################################
-
-# read updated fire shapefile this one uses old CACK integration and adds tree data 
-# need to do some cleanup above
+#read fire polygons with tree cover and CACK attributes
 fire <- vect("data/SiberiaFires2001-2020/SiberiaFires2001-2020updated_tree.shp")
 
-# read RTS shapefiles if analysis will be included...
-#rts <- vect("data/RTS_NESiberia/RTS_NESiberia.shp")
-#rts.f <- vect("data/RTS_NESiberia/RTS_NESiberia_fire.shp")
-
-## calculate mean pre-fire albedo for the 20 years pre-fire
-## and then difference between pre- and post, for RF calculations
-## expand to see code, otherwise skip and read relevant csv files
-###################################################################
-## use dplyr to avoid getting (too) rusty
-pre <- alb.tsf %>%
-  filter(ysf < 0) %>%
-  group_by(month, day) %>%
-  summarise(across(2:22089,mean, na.rm = T))
-write.csv(pre, file = "data/prefire_mean_albedo.csv", row.names = F)
-
-# filter to create data frame with only post-fire albedo
-post <- alb.tsf %>%
-  filter(ysf >= 0) %>%
-  arrange(ysf,month,day)
-write.csv(post, file = "data/postfire_albedo.csv", row.names = F)
-
-# create a reference vector matching rows in post-fire to rows in pre-fire by month and day
-r <- match(paste(post$month, post$day, sep = "."),paste(pre$month, pre$day, sep = "."))
-
-# subtract post-fire albedo from pre-fire to get delta
-d.alb <- post
-d.alb[,2:22089] <- pre[r,3:22090]-post[,2:22089]
-
-# write data fo file
-write.csv(d.alb, file = "data/postfire_delta_albedo.csv", row.names = F)
-## CALCULATE RADIATIVE FORCING USING CACK DATA
-# column names in albedo data frames correspond to unique fire IDs
-# but those beginning with a number have an X appended when they are read into R
-# need to remove this
-z <- ifelse(nchar(colnames(d.alb))==9,substr(colnames(d.alb),2,9),)
-
-# now match fire IDs from shapefile with columns in the delta albedo data frame
-r <- match(z[2:22089],fire$UniqueId)
-
-# make a data from from the CACK kernel for March - Sept
-y <- data.frame(rbind(fire$CACK_CM_3, fire$CACK_CM_4,fire$CACK_CM_5,
-                      fire$CACK_CM_6, fire$CACK_CM_7,fire$CACK_CM_8,fire$CACK_CM_9))
-
-# set colnames as UniqueId
-names(y) <- fire$UniqueId
-
-# reorder columns to match albedo data frames
-cac <- y[,r]
-rm(y)
-
-# add month variable to cack
-cac$month <- 3:9
-
-# match month records in delta albedo and cac data frames
-r <- match(d.alb$month, cac$month)
-
-# multiply cack x delta albedo to calculate RF values
-frc <- d.alb
-frc[,2:22089] <- cac[r,1:22088]*d.alb[,2:22089]
-write.csv(frc, file = "data/biweekly_radiative_forcing_per_fire.csv", row.names = F)
-###################################################################
-
-#read table of post-fire radiative forcing data
+#read tables of albedo and post-fire radiative forcing data
 frc <- read.csv(file = "data/biweekly_radiative_forcing_per_fire.csv", header = T)
 d.alb <- read.csv(file = "data/postfire_delta_albedo.csv", header = T)
 pre <- read.csv(file = "data/prefire_mean_albedo.csv", header = T)
@@ -294,8 +81,13 @@ f.lat5 <- fr %>%
 
 # calculate number of fires retained for analysis
 nf <- fr %>%
-  filter(lat.bin5!="(49,55]" & lat!="(70,77]")
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+  nrow()
 
+# filter the highest and lowest latitude bands
+f.lat5 <- f.lat5 %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") 
+  
 # create and print a barplot of area burned by latitude - 5 degree bins
 bp5 <- ggplot(f.lat5, aes(fill=yr.bin, y=area/10^6, x=lat.bin5)) + 
   geom_col(position="dodge") +
@@ -326,7 +118,7 @@ ggsave("figures/dnbr_by_latitude.png",
        width = 6, height = 6, units = "in")
 
 # boxplot of mean canopy cover in 5 degree latitude bins
-cc <- ggplot(fr, aes(x=lat.bin5, y=treecover2)) + 
+cc <- ggplot(fr, aes(x=lat.bin5, y=treecover2)) + #larch_perc
   geom_boxplot(notch = TRUE, outlier.shape = NA, fill = '#33a02c') +
   # coord_cartesian(ylim = quantile(f$dnbr/100, c(0.05, 0.95))) +
   coord_cartesian(ylim = c(0, 100)) +
@@ -334,14 +126,55 @@ cc <- ggplot(fr, aes(x=lat.bin5, y=treecover2)) +
   scale_x_discrete(labels= c("50-55", "55-60", "60-65", "65-70", "70 < ")) +
   theme_bw(base_size = 16) 
   
-
 ggsave("figures/canopy_cover_by_latitude.png",
        width = 6, height = 4, units = "in")
 
-# DELETED - monthly mean albedo by ecozone, biome, and region
-# messy and not informative
 
+ 
+###################################################################
+# ALBEDO BY 5 DEGREE LATITUDE BINS
+###################################################################
+# get unique lat bins from fire data set
+l5 <- unique(fr$lat.bin5)
 
+# get fire ids for first Lat bin
+fid <- fr$UniqueId[which(fr$lat.bin5 == l5[1])]
+
+# create data frame with first Lat bin
+pre.lat <- as.data.frame(cbind(pre$month, pre$day,
+                               rowMeans(pre[,na.omit(match(fid,colnames(pre)))],na.rm = T)))
+
+post.lat <- as.data.frame(cbind(post$ysf, post$month, post$day,
+                                rowMeans(post[,na.omit(match(fid,colnames(post)))],na.rm = T)))
+# add remaining bins
+for( i in 2:length(l5))
+{
+  fid <- fr$UniqueId[which(fr$lat.bin5 == l5[i])]
+  pre.lat <- cbind(pre.lat,rowMeans(pre[,na.omit(match(fid,colnames(pre)))],na.rm = T))
+  post.lat <- cbind(post.lat,rowMeans(post[,na.omit(match(fid,colnames(post)))],na.rm = T))
+}
+
+# set column names
+names(pre.lat) <- c("month", "day",levels(l5)[l5])
+names(post.lat) <- c("ysf","month", "day",levels(l5)[l5])
+
+pre.lat$ysf <- -1
+
+# add julian day for plotting (assume non-leap year)
+pre.lat$jday <- yday(strptime(paste(pre.lat$month,pre.lat$day,"2010", sep = "-"), 
+                              format = "%m-%e-%Y", tz = ""))
+
+post.lat$jday <- yday(strptime(paste(post.lat$month,post.lat$day,"2010", sep = "-"), 
+                               format = "%m-%e-%Y", tz = ""))
+
+# combine to a single dataframe for plotting
+alb.l <- rbind(pre.lat[,c(9,1,2,8,6,4,3,5,7)],
+               post.lat[,c(1:3,9,7,5,4,6,8)])
+
+alb.lat <- pivot_longer(alb.l,
+                        cols = 5:9,
+                        names_to = "lat",
+                        values_to = "albedo")
 
 ###################################################################
 # plot changes in albedo post-fire
@@ -418,7 +251,7 @@ ggsave("figures/postfire_seasonal_albedo_latitude_boreal_fix.png",
        width = 12, height = 4, units = "in")
 
 
-# plot april and july albedo by year since fire and latitude
+# plot march and july albedo by year since fire and latitude
 alm.ba <- alb.lat.bin.bor%>%
   filter(month == 3) %>%
   group_by(ysf,month,lat) %>%
@@ -519,7 +352,7 @@ rm(b1,b2,b3)
 # test using base R
 # b3 <- which(frc$ysf>2 & frc$ysf<6)
 # b4 <- whichwhich(frc$ysf>5 & frc$ysf<11)
-# b5 <- which(frc$ysf>10)
+# b5 <- which(frc$ysf>10) 
 # tst <- aggregate(frc[b3,2:22089], by = list(frc$month[b3],frc$day[b3]), FUN = "mean", na.rm = T)
 
 
