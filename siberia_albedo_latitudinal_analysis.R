@@ -130,7 +130,106 @@ ggsave("figures/canopy_cover_by_latitude.png",
        width = 6, height = 4, units = "in")
 
 
- 
+###################################################################
+# MAKE ALBEDO DATA FRAMES LONGER AND COMBINE WITH FIRE INFO
+###################################################################
+ pre.alb <- pivot_longer(pre,
+                     cols = c(3:22090),
+                     names_to = "UniqueId", 
+                     values_to = "albedo") 
+
+pre.m <- pre.alb %>%
+  group_by(UniqueId, month) %>%
+  summarise(albedo = mean(albedo, ne.rm = T)) %>%
+  full_join(select(fr,c("UniqueId","dnbr","lat.bin5","treecover2")), by = "UniqueId")
+
+
+pre.l <- fr %>%
+  select(UniqueId,biome,lat, lon, dnbr, yr.bin, lat.bin5) %>%
+  full_join(pre.alb, by = "UniqueId")
+
+###################################################################
+# delta albedo #
+delta <- pivot_longer(d.alb,
+                      cols = c(2:22089),
+                      names_to = "UniqueId", 
+                      values_to = "d.albedo") 
+
+delta.m <- delta %>%
+  group_by(UniqueId,ysf,month) %>%
+  summarise(d.albedo = mean(d.albedo, na.rm = T)) %>%
+  full_join(select(fr,c("UniqueId","dnbr","lat.bin5","treecover2")), by = "UniqueId")
+
+# delta.l <- fr %>%
+#   select(UniqueId,biome,lat, lon, dnbr, yr.bin, lat.bin5) %>%
+#   full_join(delta, by = "UniqueId")
+
+#plot postfire delta albedo for march, by latitude band
+sz <- 1.5
+cl <- c("#fde725", "#21918c", "#440154")
+
+delt.mar.plot <- delta.m %>%
+  filter(ysf > 0) %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+  group_by(lat.bin5, ysf, month) %>%
+  summarise(d.albedo = mean(d.albedo, na.rm = T),
+            stdev = sd(d.albedo, na.rm = T)) %>%
+  filter(month == 3) %>%
+  ggplot(aes(x = ysf, y = d.albedo, color = lat.bin5)) + 
+  geom_point(size = sz*2) +
+  geom_line(size = sz) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  xlab("Years Since Fire") + 
+  ylab(expression(paste(Delta,"albedo"))) + 
+  ggtitle("March") +
+  labs(color = "Latitude") +
+  scale_color_manual(values = cl,
+                     labels = c("55-60", "60-65", "65-70")) +
+  theme_bw(base_size = 18)
+
+#plot postfire delta albedo for july, by latitude band
+delt.jul.plot <- delta.m %>%
+  filter(ysf > 0) %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+  group_by(lat.bin5, ysf, month) %>%
+  summarise(d.albedo = mean(d.albedo, na.rm = T),
+            stdev = sd(d.albedo, na.rm = T)) %>%
+  filter(month == 7) %>%
+  ggplot(aes(x = ysf, y = d.albedo, color = lat.bin5)) + 
+  geom_point(size = sz*2) +
+  geom_line(size = sz) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  xlab("Years Since Fire") + 
+  ylab(expression(paste(Delta,"albedo"))) + 
+  ggtitle("July") +
+  labs(color = "Latitude") +
+  scale_color_manual(values = cl,
+                     labels = c("55-60", "60-65", "65-70")) +
+  theme_bw(base_size = 18)
+
+#plot postfire delta albedo for july, by latitude band
+delt.ann.plot <- delta.m %>%
+  filter(ysf > 0) %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+  group_by(lat.bin5, ysf) %>%
+  summarise(d.albedo = mean(d.albedo, na.rm = T),
+            stdev = sd(d.albedo, na.rm = T)) %>%
+  ggplot(aes(x = ysf, y = d.albedo, color = lat.bin5)) + 
+  geom_point(size = sz*2) +
+  geom_line(size = sz) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  xlab("Years Since Fire") + 
+  ylab(expression(paste(Delta,"albedo"))) + 
+  ggtitle("Mar-Sept") +
+  labs(color = "Latitude") +
+  scale_color_manual(values = cl,
+                     labels = c("55-60", "60-65", "65-70")) +
+  theme_bw(base_size = 18)
+
+delt.mar.plot+ theme(legend.position = "none") +delt.jul.plot + theme(legend.position = "none") +delt.ann.plot
+
+ggsave("figures/postfire_delta_albedo_annual_latitude_boreal.png",
+       width = 12, height = 4, units = "in")
 ###################################################################
 # ALBEDO BY 5 DEGREE LATITUDE BINS
 ###################################################################
