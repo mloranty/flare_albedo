@@ -24,32 +24,22 @@ ifelse(Sys.info()[1]=="Windows",
        setwd("G:/My Drive/Documents/research/manuscripts/siberia_albedo"),
        setwd("~/Library/CloudStorage/GoogleDrive-mloranty@colgate.edu/My Drive/Documents/research/manuscripts/siberia_albedo"))
 
-#read fire polygons with tree cover and CACK attributes
+#--------------------------------------------------------------------------#
+# read fire perimeters and MODIS albedo data
+# see albedo_fire_preprocess.R for details
+#--------------------------------------------------------------------------#
+
+# read fire polygons with tree cover and CACK attributes
 fire <- vect("data/SiberiaFires2001-2020/SiberiaFires2001-2020updated_tree.shp")
 
-#read tables of albedo and post-fire radiative forcing data
-frc <- read.csv(file = "data/biweekly_radiative_forcing_per_fire.csv", header = T)
-d.alb <- read.csv(file = "data/postfire_delta_albedo.csv", header = T)
-pre <- read.csv(file = "data/prefire_mean_albedo.csv", header = T)
-post <- read.csv(file = "data/postfire_albedo.csv", header = T)
+# read tables of albedo data
+alb <- read.csv(file = "data/siberia_fire_albedo.csv", header = T)
 
-# fix column header/fire ids (R appends X if they start with a number)
-z <- ifelse(nchar(colnames(frc))==9,substr(colnames(frc),2,9),colnames(frc))
-colnames(frc) <- z
 
-z <- ifelse(nchar(colnames(d.alb))==9,substr(colnames(d.alb),2,9),colnames(d.alb))
-colnames(d.alb) <- z
-
-z <- ifelse(nchar(colnames(pre))==9,substr(colnames(pre),2,9),colnames(pre))
-colnames(pre) <- z
-rm(z)
-
-z <- ifelse(nchar(colnames(post))==9,substr(colnames(post),2,9),colnames(post))
-colnames(post) <- z
-rm(z)
-###################################################################
-# create plots
-###################################################################
+#--------------------------------------------------------------------------#
+# summarize latitudinal tree cover and burned area patterns
+#--------------------------------------------------------------------------#
+############################################################################
 # summarize area burned by latitude
 # latitude of fires ranges from 50.2 to 76.2
 
@@ -76,17 +66,13 @@ fr <- fr %>% mutate(lat.bin5 = cut(lat.r, breaks = c(49,55,60,65,70,77)))
 # group by these bins
 f.lat5 <- fr %>%
   group_by(yr.bin, lat.bin5) %>%
-  summarise(area = sum(SizeHa), severity = mean(dnbr), tree = mean(treecover2))
-
+  summarise(area = sum(SizeHa), severity = mean(dnbr), tree = mean(treecover2)) %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") 
 
 # calculate number of fires retained for analysis
 nf <- fr %>%
   filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
   nrow()
-
-# filter the highest and lowest latitude bands
-f.lat5 <- f.lat5 %>%
-  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") 
   
 # create and print a barplot of area burned by latitude - 5 degree bins
 bp5 <- ggplot(f.lat5, aes(fill=yr.bin, y=area/10^6, x=lat.bin5)) + 
@@ -128,54 +114,65 @@ cc <- ggplot(fr, aes(x=lat.bin5, y=treecover2)) + #larch_perc
   
 ggsave("figures/canopy_cover_by_latitude.png",
        width = 6, height = 4, units = "in")
-
-
 ###################################################################
-# MAKE ALBEDO DATA FRAMES LONGER AND COMBINE WITH FIRE INFO
-###################################################################
- pre.alb <- pivot_longer(pre,
-                     cols = c(3:22090),
-                     names_to = "UniqueId", 
-                     values_to = "albedo") 
+#--------------------------------------------------------------------------#
+# get albedo ready for plotting
+#--------------------------------------------------------------------------#
 
-pre.m <- pre.alb %>%
-  group_by(UniqueId, month) %>%
-  summarise(albedo = mean(albedo, ne.rm = T)) %>%
+# calculate pre-fire albedo
+pre <- alb %>%
+  select(UniqueId,month,day,ysf,albedo) %>%
+  filter(ysf < 0) %>%
+  group_by(UniqueId,month,day) %>%
+  summarise(pre.alb = mean(albedo, na.rm = T)) 
+  
+# get cack kernal values for rf calcs
+frc <- fr %>%
+  select(UniqueId,starts_with("CACK")) %>%
+  pivot_longer(cols = starts_with("CACK"),
+               names_to = "month",
+               names_prefix = "CACK_CM_",
+               names_transform = list(month = as.integer),
+               values_to = "frc.cack") %>%
+  filter(month < 10 & month > 2)
+
+# join these to have a large dataframe
+alb.all <- alb %>%
+  select(-X) %>% 
+  full_join(pre) %>%
+  full_join(select(fr,c("UniqueId","dnbr","lat.bin5","treecover2")), by = "UniqueId") %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]")
+
+alb.all$jday <- yday(strptime(paste(alb.all$month,alb.all$day,"2010", sep = "-"), 
+              format = "%m-%e-%Y", tz = ""))
+
+#----------------#
+# monthly albedo #
+#----------------#
+
+alb.m <- select(alb.all, c("UniqueId", "albedo", "pre.alb", "month", "day", "ysf")) %>%
+  filter(ysf > 0) %>%
+  mutate(d.alb = albedo-pre.alb) %>%
+  group_by(UniqueId, ysf, month) %>%
+  summarise(albedo = mean(albedo, na.rm = T),
+            pre.alb = mean(pre.alb, na.rm = T),
+            d.alb = mean(d.alb, na.rm = T)) %>%
   full_join(select(fr,c("UniqueId","dnbr","lat.bin5","treecover2")), by = "UniqueId")
 
 
-pre.l <- fr %>%
-  select(UniqueId,biome,lat, lon, dnbr, yr.bin, lat.bin5) %>%
-  full_join(pre.alb, by = "UniqueId")
+#--------------------------------------------------------------------------#
+# plot postfire delta albedo for march, by latitude band
+#--------------------------------------------------------------------------#
 
-###################################################################
-# delta albedo #
-delta <- pivot_longer(d.alb,
-                      cols = c(2:22089),
-                      names_to = "UniqueId", 
-                      values_to = "d.albedo") 
-
-delta.m <- delta %>%
-  group_by(UniqueId,ysf,month) %>%
-  summarise(d.albedo = mean(d.albedo, na.rm = T)) %>%
-  full_join(select(fr,c("UniqueId","dnbr","lat.bin5","treecover2")), by = "UniqueId")
-
-# delta.l <- fr %>%
-#   select(UniqueId,biome,lat, lon, dnbr, yr.bin, lat.bin5) %>%
-#   full_join(delta, by = "UniqueId")
-
-#plot postfire delta albedo for march, by latitude band
 sz <- 1.5
 cl <- c("#fde725", "#21918c", "#440154")
 
-delt.mar.plot <- delta.m %>%
-  filter(ysf > 0) %>%
-  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+delt.mar.plot <- alb.m %>%
   group_by(lat.bin5, ysf, month) %>%
-  summarise(d.albedo = mean(d.albedo, na.rm = T),
-            stdev = sd(d.albedo, na.rm = T)) %>%
+  summarise(d.alb = mean(d.alb, na.rm = T),
+            stdev = sd(d.alb, na.rm = T)) %>%
   filter(month == 3) %>%
-  ggplot(aes(x = ysf, y = d.albedo, color = lat.bin5)) + 
+  ggplot(aes(x = ysf, y = d.alb/1000, color = lat.bin5)) + 
   geom_point(size = sz*2) +
   geom_line(size = sz) +
   geom_hline(yintercept = 0, linetype = 2) +
@@ -188,14 +185,12 @@ delt.mar.plot <- delta.m %>%
   theme_bw(base_size = 18)
 
 #plot postfire delta albedo for july, by latitude band
-delt.jul.plot <- delta.m %>%
-  filter(ysf > 0) %>%
-  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+delt.jul.plot <- alb.m %>%
   group_by(lat.bin5, ysf, month) %>%
-  summarise(d.albedo = mean(d.albedo, na.rm = T),
-            stdev = sd(d.albedo, na.rm = T)) %>%
+  summarise(d.alb = mean(d.alb, na.rm = T),
+            stdev = sd(d.alb, na.rm = T)) %>%
   filter(month == 7) %>%
-  ggplot(aes(x = ysf, y = d.albedo, color = lat.bin5)) + 
+  ggplot(aes(x = ysf, y = d.alb/1000, color = lat.bin5)) + 
   geom_point(size = sz*2) +
   geom_line(size = sz) +
   geom_hline(yintercept = 0, linetype = 2) +
@@ -208,13 +203,12 @@ delt.jul.plot <- delta.m %>%
   theme_bw(base_size = 18)
 
 #plot postfire delta albedo for july, by latitude band
-delt.ann.plot <- delta.m %>%
-  filter(ysf > 0) %>%
-  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+delt.ann.plot <- alb.m %>%
   group_by(lat.bin5, ysf) %>%
-  summarise(d.albedo = mean(d.albedo, na.rm = T),
-            stdev = sd(d.albedo, na.rm = T)) %>%
-  ggplot(aes(x = ysf, y = d.albedo, color = lat.bin5)) + 
+  summarise(d.alb = mean(d.alb, na.rm = T),
+            stdev = sd(d.alb, na.rm = T)) %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+  ggplot(aes(x = ysf, y = d.alb/1000, color = lat.bin5)) + 
   geom_point(size = sz*2) +
   geom_line(size = sz) +
   geom_hline(yintercept = 0, linetype = 2) +

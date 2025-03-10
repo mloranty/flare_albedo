@@ -143,7 +143,7 @@ alb.fire <- fr %>%
   inner_join(alb,) %>%
   mutate(ysf = year-FireYr)
 
-write.csv(alb.fire, "data/siberia_fire_albedo.csv", header = T)
+write.csv(alb.fire, "data/siberia_fire_albedo.csv")
 
 #--------------------------------------------------------------------------#
 # I think the code below is better suited for the analyses, 
