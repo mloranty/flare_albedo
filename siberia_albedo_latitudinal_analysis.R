@@ -115,9 +115,9 @@ cc <- ggplot(fr, aes(x=lat.bin5, y=treecover2)) + #larch_perc
 ggsave("figures/canopy_cover_by_latitude.png",
        width = 6, height = 4, units = "in")
 ###################################################################
-#--------------------------------------------------------------------------#
-# get albedo ready for plotting
-#--------------------------------------------------------------------------#
+#-------------------------------------------------------------------------------------------------------------------------#
+# prepare data for plotting
+#-------------------------------------------------------------------------------------------------------------------------#
 
 # calculate pre-fire albedo
 pre <- alb %>%
@@ -125,7 +125,14 @@ pre <- alb %>%
   filter(ysf < 0) %>%
   group_by(UniqueId,month,day) %>%
   summarise(pre.alb = mean(albedo, na.rm = T)) 
-  
+
+pre.m <- pre %>%
+  group_by(UniqueId, month) %>%
+  summarise(albedo = mean(pre.alb, na.rm = T)) %>%
+  mutate(ysf = -1) %>%
+  full_join(select(fr,c("UniqueId","dnbr","lat.bin5","treecover2")), by = "UniqueId") %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]")
+
 # get cack kernal values for rf calcs
 frc <- fr %>%
   select(UniqueId,starts_with("CACK")) %>%
@@ -143,8 +150,11 @@ alb.all <- alb %>%
   full_join(select(fr,c("UniqueId","dnbr","lat.bin5","treecover2")), by = "UniqueId") %>%
   filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]")
 
+# add julian day vars
 alb.all$jday <- yday(strptime(paste(alb.all$month,alb.all$day,"2010", sep = "-"), 
               format = "%m-%e-%Y", tz = ""))
+pre$jday <- yday(strptime(paste(pre$month,pre$day,"2010", sep = "-"), 
+                          format = "%m-%e-%Y", tz = ""))
 
 #----------------#
 # monthly albedo #
@@ -159,10 +169,35 @@ alb.m <- select(alb.all, c("UniqueId", "albedo", "pre.alb", "month", "day", "ysf
             d.alb = mean(d.alb, na.rm = T)) %>%
   full_join(select(fr,c("UniqueId","dnbr","lat.bin5","treecover2")), by = "UniqueId")
 
+#-------------------------------------------------------------------------------------------------------------------------#
+# plot of pre-fire albedo for each latitudinal bin
+#-------------------------------------------------------------------------------------------------------------------------#
+sz <- 1.5
+cl <- c("#fde725", "#21918c", "#440154")
 
-#--------------------------------------------------------------------------#
-# plot postfire delta albedo for march, by latitude band
-#--------------------------------------------------------------------------#
+pre.alb.lat <- pre %>%
+  full_join(select(fr,c("UniqueId","dnbr","lat.bin5","treecover2")), by = "UniqueId") %>%
+  group_by(jday, lat.bin5) %>%
+  summarise(alb = mean(pre.alb, na.rm = T),
+            stdev = sd(pre.alb, na.rm = T)) %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+  ggplot(aes(x = jday, y = alb/1000, color = lat.bin5)) + 
+  geom_point(size = sz) +
+  geom_line(size = sz) +
+  #geom_ribbon(aes(ymax = (alb+stdev)/1000, ymin = (alb-stdev)/1000), alpha = 0.1, fill = "gray") 
+  xlab("Day of Year") + 
+  ylab("Albedo") + 
+  ggtitle("Pre-fire Albedo") +
+  labs(color = "Latitude") +
+  scale_color_manual(values = cl,
+                     labels = c("55-60", "60-65", "65-70")) +
+  theme_bw(base_size = 18)
+
+ggsave("figures/prefire_albedo_by_latitude.png",
+       width = 6, height = 6, units = "in")
+#-------------------------------------------------------------------------------------------------------------------------#
+# plot postfire delta albedo by latitude band  for march, july, and march-sept
+#-------------------------------------------------------------------------------------------------------------------------#
 
 sz <- 1.5
 cl <- c("#fde725", "#21918c", "#440154")
@@ -205,12 +240,13 @@ delt.jul.plot <- alb.m %>%
 #plot postfire delta albedo for july, by latitude band
 delt.ann.plot <- alb.m %>%
   group_by(lat.bin5, ysf) %>%
-  summarise(d.alb = mean(d.alb, na.rm = T),
-            stdev = sd(d.alb, na.rm = T)) %>%
+  summarise(d.albedo = mean(d.alb, na.rm = T),
+            stdev= sd(d.alb, na.rm = T)) %>%
   filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
-  ggplot(aes(x = ysf, y = d.alb/1000, color = lat.bin5)) + 
+  ggplot(aes(x = ysf, y = d.albedo/1000, color = lat.bin5)) + 
   geom_point(size = sz*2) +
   geom_line(size = sz) +
+  #geom_ribbon(aes(ymax = stdev, ymin = -stdev), alpha = 0.1, fill = "red") 
   geom_hline(yintercept = 0, linetype = 2) +
   xlab("Years Since Fire") + 
   ylab(expression(paste(Delta,"albedo"))) + 
@@ -224,92 +260,141 @@ delt.mar.plot+ theme(legend.position = "none") +delt.jul.plot + theme(legend.pos
 
 ggsave("figures/postfire_delta_albedo_annual_latitude_boreal.png",
        width = 12, height = 4, units = "in")
-###################################################################
-# ALBEDO BY 5 DEGREE LATITUDE BINS
-###################################################################
-# get unique lat bins from fire data set
-l5 <- unique(fr$lat.bin5)
 
-# get fire ids for first Lat bin
-fid <- fr$UniqueId[which(fr$lat.bin5 == l5[1])]
+#-------------------------------------------------------------------------------------------------------------------------#
+# plot postfire albedo by latitude band for march, july, and march-sept
+#-------------------------------------------------------------------------------------------------------------------------#
 
-# create data frame with first Lat bin
-pre.lat <- as.data.frame(cbind(pre$month, pre$day,
-                               rowMeans(pre[,na.omit(match(fid,colnames(pre)))],na.rm = T)))
+sz <- 1.5
+cl <- c("#fde725", "#21918c", "#440154")
 
-post.lat <- as.data.frame(cbind(post$ysf, post$month, post$day,
-                                rowMeans(post[,na.omit(match(fid,colnames(post)))],na.rm = T)))
-# add remaining bins
-for( i in 2:length(l5))
-{
-  fid <- fr$UniqueId[which(fr$lat.bin5 == l5[i])]
-  pre.lat <- cbind(pre.lat,rowMeans(pre[,na.omit(match(fid,colnames(pre)))],na.rm = T))
-  post.lat <- cbind(post.lat,rowMeans(post[,na.omit(match(fid,colnames(post)))],na.rm = T))
-}
+alb.mar.plot <- alb.m %>%
+  group_by(lat.bin5, ysf, month) %>%
+  summarise(alb = mean(albedo, na.rm = T),
+            stdev = sd(albedo, na.rm = T)) %>%
+  filter(month == 3) %>%
+  ggplot(aes(x = ysf, y = alb/1000, color = lat.bin5)) + 
+  geom_point(size = sz*2) +
+  geom_line(size = sz) +
+  xlab("Years Since Fire") + 
+  ylab("Albedo") + 
+  ggtitle("March") +
+  labs(color = "Latitude") +
+  scale_color_manual(values = cl,
+                     labels = c("55-60", "60-65", "65-70")) +
+  theme_bw(base_size = 18)
 
-# set column names
-names(pre.lat) <- c("month", "day",levels(l5)[l5])
-names(post.lat) <- c("ysf","month", "day",levels(l5)[l5])
+#plot postfire delta albedo for july, by latitude band
+alb.jul.plot <- alb.m %>%
+  group_by(lat.bin5, ysf, month) %>%
+  summarise(alb = mean(albedo, na.rm = T),
+            stdev = sd(albedo, na.rm = T)) %>%
+  filter(month == 7) %>%
+  ggplot(aes(x = ysf, y = alb/1000, color = lat.bin5)) + 
+  geom_point(size = sz*2) +
+  geom_line(size = sz) +
+  xlab("Years Since Fire") + 
+  ylab("Albedo") + 
+  ggtitle("July") +
+  labs(color = "Latitude") +
+  scale_color_manual(values = cl,
+                     labels = c("55-60", "60-65", "65-70")) +
+  theme_bw(base_size = 18)
 
-pre.lat$ysf <- -1
+#plot postfire delta albedo for july, by latitude band
+alb.ann.plot <- alb.m %>%
+  group_by(lat.bin5, ysf) %>%
+  summarise(alb = mean(albedo, na.rm = T),
+            stdev = sd(albedo, na.rm = T)) %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+  ggplot(aes(x = ysf, y = alb/1000, color = lat.bin5)) + 
+  geom_point(size = sz*2) +
+  geom_line(size = sz) +
+  #geom_ribbon(aes(ymax = (alb+stdev)/1000, ymin = (alb-stdev)/1000), alpha = 0.1, fill = "red") 
+  xlab("Years Since Fire") + 
+  ylab("Albedo") + 
+  ggtitle("Mar-Sept") +
+  labs(color = "Latitude") +
+  scale_color_manual(values = cl,
+                     labels = c("55-60", "60-65", "65-70")) +
+  theme_bw(base_size = 18)
 
-# add julian day for plotting (assume non-leap year)
-pre.lat$jday <- yday(strptime(paste(pre.lat$month,pre.lat$day,"2010", sep = "-"), 
-                              format = "%m-%e-%Y", tz = ""))
+alb.mar.plot+ theme(legend.position = "none") +alb.jul.plot + theme(legend.position = "none") + alb.ann.plot
 
-post.lat$jday <- yday(strptime(paste(post.lat$month,post.lat$day,"2010", sep = "-"), 
-                               format = "%m-%e-%Y", tz = ""))
+ggsave("figures/postfire_albedo_annual_latitude_boreal.png",
+       width = 12, height = 4, units = "in")
 
-# combine to a single dataframe for plotting
-alb.l <- rbind(pre.lat[,c(9,1,2,8,6,4,3,5,7)],
-               post.lat[,c(1:3,9,7,5,4,6,8)])
+#-------------------------------------------------------------------------------------------------------------------------#
+# plot pre and postfire albedo by latitude band for march, july, and march-sept
+#-------------------------------------------------------------------------------------------------------------------------#
 
-alb.lat <- pivot_longer(alb.l,
-                        cols = 5:9,
-                        names_to = "lat",
-                        values_to = "albedo")
+p.alb.mar.plot <- alb.m %>%
+  bind_rows(pre.m) %>%
+  group_by(lat.bin5, ysf, month) %>%
+  summarise(alb = mean(albedo, na.rm = T),
+            stdev = sd(albedo, na.rm = T)) %>%
+  filter(month == 3) %>%
+  ggplot(aes(x = ysf, y = alb/1000, color = lat.bin5)) + 
+  geom_point(size = sz*2) +
+  geom_line(size = sz) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  xlab("Years Since Fire") + 
+  ylab("Albedo") + 
+  ggtitle("March") +
+  labs(color = "Latitude") +
+  scale_color_manual(values = cl,
+                     labels = c("55-60", "60-65", "65-70")) +
+  theme_bw(base_size = 18)
 
-###################################################################
-# plot changes in albedo post-fire
-###################################################################
+#plot postfire delta albedo for july, by latitude band
+p.alb.jul.plot <- alb.m %>%
+  bind_rows(pre.m) %>%
+  group_by(lat.bin5, ysf, month) %>%
+  summarise(alb = mean(albedo, na.rm = T),
+            stdev = sd(albedo, na.rm = T)) %>%
+  filter(month == 7) %>%
+  ggplot(aes(x = ysf, y = alb/1000, color = lat.bin5)) + 
+  geom_point(size = sz*2) +
+  geom_line(size = sz) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  xlab("Years Since Fire") + 
+  ylab("Albedo") + 
+  ggtitle("July") +
+  labs(color = "Latitude") +
+  scale_color_manual(values = cl,
+                     labels = c("55-60", "60-65", "65-70")) +
+  theme_bw(base_size = 18)
 
-# mean albedo by latitude for each year post-fire
-ala <- select(alb.lat, c(-month,-day,-jday)) %>%
-  group_by(ysf,lat) %>%
-  summarise(albedo = mean(albedo, na.rm = T))
+#plot postfire delta albedo for july, by latitude band
+p.alb.ann.plot <- alb.m %>%
+  bind_rows(pre.m) %>%
+  group_by(lat.bin5, ysf) %>%
+  summarise(alb = mean(albedo, na.rm = T),
+            stdev = sd(albedo, na.rm = T)) %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+  ggplot(aes(x = ysf, y = alb/1000, color = lat.bin5)) + 
+  geom_point(size = sz*2) +
+  geom_line(size = sz) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  xlab("Years Since Fire") + 
+  ylab("Albedo") + 
+  ggtitle("Mar-Sept") +
+  labs(color = "Latitude") +
+  scale_color_manual(values = cl,
+                     labels = c("55-60", "60-65", "65-70")) +
+  theme_bw(base_size = 18)
 
-# mean albedo by latitude for each month and year year post-fire
-alm <- select(alb.lat, c(-day,-jday)) %>%
-  group_by(ysf,month,lat) %>%
-  summarise(albedo = mean(albedo, na.rm = T))
+p.alb.mar.plot+ theme(legend.position = "none") + p.alb.jul.plot + theme(legend.position = "none") + p.alb.ann.plot
 
-# look at years, 1, 2, 3-5, and 5-10 post-fire
-b1 <- alb.lat %>%
-  filter(2<ysf & ysf<6) %>%
-  group_by(month, day, jday, lat) %>%
-  summarise(ysf = mean(ysf, na.rm = T),
-            albedo = mean(albedo, na.rm = T)) 
+ggsave("figures/pre_postfire_albedo_annual_latitude_boreal.png",
+       width = 12, height = 4, units = "in")
 
-b2 <- alb.lat %>%
-  filter(5<ysf & ysf<11) %>%
-  group_by(month, day, jday, lat) %>%
-  summarise(ysf = mean(ysf, na.rm = T),
-            albedo = mean(albedo, na.rm = T)) 
-
-b3 <- alb.lat %>%
-  filter(10<ysf) %>%
-  group_by(month, day, jday, lat) %>%
-  summarise(ysf = mean(ysf, na.rm = T),
-            albedo = mean(albedo, na.rm = T)) 
-
-alb.lat.bin <- alb.lat %>%
-  filter(0>ysf | 0<ysf & ysf<3) %>%
-  rbind(b1,b2,b3)
+#--------------------------------------------------------------------------#
+# next plot
+#--------------------------------------------------------------------------#
 
 
-rm(b1,b2,b3)
 
-alb.lat.bin$tsf <- as.factor(alb.lat.bin$ysf)
 
 # mplot post-fire albedo by annual bins, with a separate plot for each latitude bin
 a <- ggplot() +
