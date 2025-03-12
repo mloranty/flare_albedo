@@ -42,7 +42,7 @@ alb <- read.csv(file = "data/siberia_fire_albedo.csv", header = T)
 ############################################################################
 # summarize area burned by latitude
 # latitude of fires ranges from 50.2 to 76.2
-
+cl <- c("#fde725", "#21918c", "#440154")
 # convert fire attribute to data frame
 fr <- as.data.frame(fire)
 
@@ -72,15 +72,18 @@ f.lat5 <- fr %>%
 # calculate number of fires retained for analysis
 nf <- fr %>%
   filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+#  filter(biome=="Tundra") %>%
   nrow()
   
 # create and print a barplot of area burned by latitude - 5 degree bins
-bp5 <- ggplot(f.lat5, aes(fill=yr.bin, y=area/10^6, x=lat.bin5)) + 
+bp5 <- f.lat5 %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+  ggplot(aes(fill=yr.bin, y=area/10^6, x=lat.bin5)) + 
   geom_col(position="dodge") +
   xlab("Latitude") + ylab("Area Burned (MHa)") +
   scale_fill_manual(values = c('#fdbe85','#fd8d3c','#e6550d','#a63603'),
                     labels = c("2001-2005","2006-2010","2011-2015","2016-2020")) +
-  scale_x_discrete(labels = c("50-55", "55-60", "60-65", "65-70", "70 < ")) +
+  scale_x_discrete(labels= c("55-60", "60-65", "65-70")) +
   labs(fill = "") +
   theme_bw(base_size = 16)
 
@@ -104,12 +107,16 @@ ggsave("figures/dnbr_by_latitude.png",
        width = 6, height = 6, units = "in")
 
 # boxplot of mean canopy cover in 5 degree latitude bins
-cc <- ggplot(fr, aes(x=lat.bin5, y=treecover2)) + #larch_perc
-  geom_boxplot(notch = TRUE, outlier.shape = NA, fill = '#33a02c') +
+cc <- fr %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+  ggplot(aes(x=lat.bin5, y=treecover2)) + #larch_perc
+  geom_boxplot(notch = TRUE, outlier.shape = NA, fill = cl) +
   # coord_cartesian(ylim = quantile(f$dnbr/100, c(0.05, 0.95))) +
   coord_cartesian(ylim = c(0, 100)) +
   xlab("Latitude") + ylab("Canopy Cover (%)") + 
-  scale_x_discrete(labels= c("50-55", "55-60", "60-65", "65-70", "70 < ")) +
+  scale_x_discrete(labels= c("55-60", "60-65", "65-70")) +
+  scale_color_manual(values = cl,
+                     labels = c("55-60", "60-65", "65-70")) +
   theme_bw(base_size = 16) 
   
 ggsave("figures/canopy_cover_by_latitude.png",
@@ -150,6 +157,14 @@ alb.all <- alb %>%
   full_join(select(fr,c("UniqueId","dnbr","lat.bin5","treecover2")), by = "UniqueId") %>%
   filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]")
 
+# add post-fire bins
+alb.all$pf.bin <- as.factor(case_match(alb.all$ysf,
+                       c(-20:-1)~"pre",
+                       0~"FY",
+                       c(1:2)~"1-2",
+                       c(3:5)~"3-5",
+                       c(6:23)~"6-23"))
+ levels(alb.all$pf.bin) <- c("pre", "FY", "1-2", "3-5", "6-23")
 # add julian day vars
 alb.all$jday <- yday(strptime(paste(alb.all$month,alb.all$day,"2010", sep = "-"), 
               format = "%m-%e-%Y", tz = ""))
@@ -169,6 +184,48 @@ alb.m <- select(alb.all, c("UniqueId", "albedo", "pre.alb", "month", "day", "ysf
             d.alb = mean(d.alb, na.rm = T)) %>%
   full_join(select(fr,c("UniqueId","dnbr","lat.bin5","treecover2")), by = "UniqueId")
 
+#-------------------------------------------------------------------------------------------------------------------------#
+# calculate summaries for pre-fire tree cover and albedo and perform ANOVAs
+#-------------------------------------------------------------------------------------------------------------------------#
+
+# tree cover summary stats by latitude
+cc.tbl <- fr %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+  group_by(lat.bin5) %>%
+  summarise(tree = mean(treecover2, na.rm = T),
+            tree.sd = sd(treecover2, na.rm = T),
+            tree.sem = sd(treecover2, na.rm = T)/n()) %>%
+  write.csv(,file = "results/tree_cover_summary.csv")
+
+# tree cover by latitude ANOVA
+cc3 <- fr %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") 
+
+  cc.aov <- aov(cc3$treecover2~cc3$lat.bin5)
+  TukeyHSD(cc.aov)
+  rm(cc3)
+
+# monthly albedo by latitude    
+pre3 <- pre.m %>%
+    group_by(lat.bin5, month) %>%
+    summarise(alb = mean(albedo/1000, na.rm = T),
+              alb.sd = sd(albedo/1000, na.rm = T),
+              alb.sem = sd(albedo/1000, na.rm = T)/n()) %>%
+    write.csv(,file = "results/prefire_albedo_summary.csv")
+
+pre.3 <- pre.m %>%
+  filter(month == 3) 
+
+pre3.aov <- aov(pre.3$albedo/1000~pre.3$lat.bin5)
+summary(pre3.aov)
+TukeyHSD(pre3.aov)
+
+pre.7 <- pre.m %>%
+  filter(month == 7) 
+
+pre7.aov <- aov(pre.7$albedo/1000~pre.7$lat.bin5)
+summary(pre7.aov)
+TukeyHSD(pre7.aov)
 #-------------------------------------------------------------------------------------------------------------------------#
 # plot of pre-fire albedo for each latitudinal bin
 #-------------------------------------------------------------------------------------------------------------------------#
@@ -195,6 +252,11 @@ pre.alb.lat <- pre %>%
 
 ggsave("figures/prefire_albedo_by_latitude.png",
        width = 6, height = 6, units = "in")
+
+cc + labs(tag = "a") + pre.alb.lat + labs(title = "", tag = "b") 
+
+ggsave("figures/prefire_treecover_albedo.png",
+       width = 8, height = 4, units = "in")
 #-------------------------------------------------------------------------------------------------------------------------#
 # plot postfire delta albedo by latitude band  for march, july, and march-sept
 #-------------------------------------------------------------------------------------------------------------------------#
@@ -389,12 +451,26 @@ p.alb.mar.plot+ theme(legend.position = "none") + p.alb.jul.plot + theme(legend.
 ggsave("figures/pre_postfire_albedo_annual_latitude_boreal.png",
        width = 12, height = 4, units = "in")
 
-#--------------------------------------------------------------------------#
-# next plot
-#--------------------------------------------------------------------------#
+#-------------------------------------------------------------------------------------------------------------------------#
+# seasonal albedo trajectories for binned time since fire, for each lat band
+#-------------------------------------------------------------------------------------------------------------------------#
 
+alb.pf.bin <- alb.all %>%
+  filter(pf.bin != "FY") %>%
+  group_by(lat.bin5, pf.bin, jday) %>%
+  summarise(alb = mean(albedo/1000, na.rm = T))
 
-
+alb.pfp.low <- alb.pf.bin %>%
+  filter(lat.bin5 == "(55,60]") %>%
+  ggplot(aes(x = jday, y = alb, color = pf.bin)) + 
+  #geom_point(size = sz*2) +
+  geom_line(size = sz) +
+  #geom_vline(xintercept = 0, linetype = 2) +
+  xlab("Day of Year") + 
+  ylab("Albedo") + 
+  scale_color_manual(values = c("red", hcl.colors(8,palette = "Blues 3",rev=T)[6:8]),
+                     labels = c("Prefire", "1-2", "3-5", "6-23"))
+  theme_bw(base_size = 18)
 
 # mplot post-fire albedo by annual bins, with a separate plot for each latitude bin
 a <- ggplot() +
@@ -407,6 +483,9 @@ a <- ggplot() +
 ggsave("figures/postfire_seasonal_albedo_latitude_freey.png",
        width = 12, height = 8, units = "in")
 
+#-------------------------------------------------------------------------------------------------------------------------#
+# OLD CODE
+#-------------------------------------------------------------------------------------------------------------------------#
 # make a plot that excludes southern and northern most latitudinal bins
 alb.lat.bin.bor <- alb.lat.bin %>%
   filter(lat!="(49,55]" & lat!="(70,77]")
@@ -429,69 +508,7 @@ ggsave("figures/postfire_seasonal_albedo_latitude_boreal_fix.png",
        width = 12, height = 4, units = "in")
 
 
-# plot march and july albedo by year since fire and latitude
-alm.ba <- alb.lat.bin.bor%>%
-  filter(month == 3) %>%
-  group_by(ysf,month,lat) %>%
-  summarise(albedo = mean(albedo, na.rm = T),
-            sd = sd(albedo, na.rm = T))
 
-alm.bj <- alb.lat.bin.bor%>%
-  filter(month == 7) %>%
-  group_by(ysf,month,lat) %>%
-  summarise(albedo = mean(albedo, na.rm = T),
-            sd = sd(albedo, na.rm = T))
-
-alm.a <- alb.lat.bin.bor%>%
-  group_by(ysf,lat) %>%
-  summarise(albedo = mean(albedo, na.rm = T),
-            sd = sd(albedo, na.rm = T))
-
-sz <- 1.5
-cl <- c("#fde725", "#21918c", "#440154")
-# plot for March
-ab1 <- ggplot(data = alm.ba, aes(x = ysf, y = albedo, color = lat)) + 
-  geom_point(size = sz*2) +
-  geom_line(size = sz) +
-  geom_vline(xintercept = 0, linetype = 2) +
-  xlab("Years Since Fire") + 
-  ylab("Albedo") + 
-  ggtitle("March") +
-  labs(color = "Latitude") +
-  scale_color_manual(values = cl,
-                     labels = c("55-60", "60-65", "65-70")) +
-  theme_bw(base_size = 18)
-
-# plot for July
-ab2 <- ggplot(data = alm.bj, aes(x = ysf, y = albedo, color = lat)) + 
-  geom_point(size = sz*2) +
-  geom_line(size = sz) +
-  geom_vline(xintercept = 0, linetype = 2) +
-  xlab("Years Since Fire") + 
-  ylab("Albedo") + 
-  labs(color = "Latitude") +
-  ggtitle("July") +
-  scale_color_manual(values = cl,
-                     labels = c("55-60", "60-65", "65-70")) +
-  theme_bw(base_size = 18)
-
-# plot for mean 
-ab3 <- ggplot(data = alm.a, aes(x = ysf, y = albedo, color = lat)) + 
-  geom_point(size = sz*2) +
-  geom_line(size = sz) +
-  geom_vline(xintercept = 0, linetype = 2) +
-  xlab("Years Since Fire") + 
-  ylab("Albedo") + 
-  ggtitle("March-Sept") +
-  labs(color = "Latitude") +
-  scale_color_manual(values = cl,
-                     labels = c("55-60", "60-65", "65-70")) +
-  theme_bw(base_size = 18)
-
-ab1+ theme(legend.position = "none") +ab2 + theme(legend.position = "none") +ab3
-
-ggsave("figures/postfire_delta_albedo_latitude_boreal.png",
-       width = 12, height = 4, units = "in")
 ###################################################################
 # plot changes in radiative forcing post-fire
 # mean radiative forcing over March-Sept by year since fire,
