@@ -164,7 +164,9 @@ alb.all$pf.bin <- as.factor(case_match(alb.all$ysf,
                        c(1:2)~"1-2",
                        c(3:5)~"3-5",
                        c(6:23)~"6-23"))
- levels(alb.all$pf.bin) <- c("pre", "FY", "1-2", "3-5", "6-23")
+
+alb.all$pf.bin <- fct_relevel(alb.all$pf.bin,c("pre", "1-2", "3-5", "6-23", "FY"))
+ #levels(alb.all$pf.bin) <- c("pre", "FY", "1-2", "3-5", "6-23")
 # add julian day vars
 alb.all$jday <- yday(strptime(paste(alb.all$month,alb.all$day,"2010", sep = "-"), 
               format = "%m-%e-%Y", tz = ""))
@@ -177,7 +179,7 @@ pre$jday <- yday(strptime(paste(pre$month,pre$day,"2010", sep = "-"),
 
 alb.m <- select(alb.all, c("UniqueId", "albedo", "pre.alb", "month", "day", "ysf")) %>%
   filter(ysf > 0) %>%
-  mutate(d.alb = albedo-pre.alb) %>%
+  mutate(d.alb = pre.alb-albedo) %>%
   group_by(UniqueId, ysf, month) %>%
   summarise(albedo = mean(albedo, na.rm = T),
             pre.alb = mean(pre.alb, na.rm = T),
@@ -389,6 +391,7 @@ ggsave("figures/postfire_albedo_annual_latitude_boreal.png",
 #-------------------------------------------------------------------------------------------------------------------------#
 # plot pre and postfire albedo by latitude band for march, july, and march-sept
 #-------------------------------------------------------------------------------------------------------------------------#
+sz = 1
 
 p.alb.mar.plot <- alb.m %>%
   bind_rows(pre.m) %>%
@@ -397,7 +400,7 @@ p.alb.mar.plot <- alb.m %>%
             stdev = sd(albedo, na.rm = T)) %>%
   filter(month == 3) %>%
   ggplot(aes(x = ysf, y = alb/1000, color = lat.bin5)) + 
-  geom_point(size = sz*2) +
+  geom_point(size = sz) +
   geom_line(size = sz) +
   geom_vline(xintercept = 0, linetype = 2) +
   xlab("Years Since Fire") + 
@@ -416,7 +419,7 @@ p.alb.jul.plot <- alb.m %>%
             stdev = sd(albedo, na.rm = T)) %>%
   filter(month == 7) %>%
   ggplot(aes(x = ysf, y = alb/1000, color = lat.bin5)) + 
-  geom_point(size = sz*2) +
+  geom_point(size = sz) +
   geom_line(size = sz) +
   geom_vline(xintercept = 0, linetype = 2) +
   xlab("Years Since Fire") + 
@@ -435,7 +438,7 @@ p.alb.ann.plot <- alb.m %>%
             stdev = sd(albedo, na.rm = T)) %>%
   filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
   ggplot(aes(x = ysf, y = alb/1000, color = lat.bin5)) + 
-  geom_point(size = sz*2) +
+  geom_point(size = sz) +
   geom_line(size = sz) +
   geom_vline(xintercept = 0, linetype = 2) +
   xlab("Years Since Fire") + 
@@ -468,254 +471,151 @@ alb.pfp.low <- alb.pf.bin %>%
   #geom_vline(xintercept = 0, linetype = 2) +
   xlab("Day of Year") + 
   ylab("Albedo") + 
+  ggtitle("55-60") +
+  labs(color = "", tag = "a") +
   scale_color_manual(values = c("red", hcl.colors(8,palette = "Blues 3",rev=T)[6:8]),
-                     labels = c("Prefire", "1-2", "3-5", "6-23"))
+                     labels = c("Prefire", "1-2", "3-5", "6-23")) +
   theme_bw(base_size = 18)
 
-# mplot post-fire albedo by annual bins, with a separate plot for each latitude bin
-a <- ggplot() +
-  geom_line(data = alb.lat.bin, aes(x = jday, y = albedo, color = tsf), linewidth = 1) + 
-  scale_color_manual(values = c("red", hcl.colors(8,palette = "Blues 3",rev=T)[4:8]),
-                     labels = c("Prefire", "1", "2", "3-5", "6-10", "11-20")) +
-  theme_bw(base_size = 16) 
+alb.pfp.mid <- alb.pf.bin %>%
+  filter(lat.bin5 == "(60,65]") %>%
+  ggplot(aes(x = jday, y = alb, color = pf.bin)) + 
+  #geom_point(size = sz*2) +
+  geom_line(size = sz) +
+  #geom_vline(xintercept = 0, linetype = 2) +
+  xlab("Day of Year") + 
+  ylab("Albedo") + 
+  ggtitle("60-65") +
+  labs(color = "", tag = "b") +
+  scale_color_manual(values = c("red", hcl.colors(8,palette = "Blues 3",rev=T)[6:8]),
+                     labels = c("Prefire", "1-2", "3-5", "6-23")) +
+  theme_bw(base_size = 18)
 
+alb.pfp.hi <- alb.pf.bin %>%
+  filter(lat.bin5 == "(65,70]") %>%
+  ggplot(aes(x = jday, y = alb, color = pf.bin)) + 
+  #geom_point(size = sz*2) +
+  geom_line(size = sz) +
+  #geom_vline(xintercept = 0, linetype = 2) +
+  xlab("Day of Year") + 
+  ylab("Albedo") + 
+  ggtitle("65-70") +
+  labs(color = "", tag = "c") +
+  scale_color_manual(values = c("red", hcl.colors(8,palette = "Blues 3",rev=T)[6:8]),
+                     labels = c("Prefire", "1-2", "3-5", "6-23")) +
+  theme_bw(base_size = 18)
 
-ggsave("figures/postfire_seasonal_albedo_latitude_freey.png",
+alb.pfp.low + theme(legend.position = "none") + 
+alb.pfp.mid + theme(legend.position = "none") + 
+alb.pfp.hi +
+p.alb.mar.plot + theme(legend.position = "none") + labs(tag = "d") + 
+p.alb.jul.plot + theme(legend.position = "none") + labs(tag = "e") + 
+p.alb.ann.plot + labs(tag = "f") 
+
+ggsave("figures/postfire_albedo_latitude_season.png",
        width = 12, height = 8, units = "in")
+
+#-------------------------------------------------------------------------------------------------------------------------#
+# radiative forcing plots - spring, summer, and seasonal, by latitude, with ANOVA
+#-------------------------------------------------------------------------------------------------------------------------#
+# make a plot that excludes southern and northern most latitudinal bins
+
+alb.frc <- alb.m %>%
+  full_join(frc, join_by(UniqueId, month)) %>%
+  mutate(rf = (d.alb/1000)*frc.cack,
+         pf.bin = as.factor(case_match(ysf,
+                                       c(1:2)~"1-2",
+                                       c(3:5)~"3-5",
+                                       c(6:23)~"6-23")))
+
+
+#boxplot for march
+frc.mar <- alb.frc %>%
+  na.omit() %>%
+  filter(month == 3) %>%
+  ggplot(aes(x = pf.bin, y=rf, fill = lat.bin5)) +
+  geom_boxplot(position ="dodge2") +
+  geom_hline(yintercept = 0, linetype = 2) +
+  ylim(-7,7) +
+  xlab("Years Since Fire") +
+  ylab(expression(paste("Radiative Forcing W",m^-2,sep=""))) +
+  ggtitle("March") +
+  labs(fill = "Latitude") +
+  scale_fill_manual(values = cl,
+                    labels = c("55-60", "60-65", "65-70")) +
+  theme_bw(base_size = 16)
+
+#boxplot for july
+frc.jul <- alb.frc %>%
+  na.omit() %>%
+  filter(month == 7) %>%
+  ggplot(aes(x = pf.bin, y=rf, fill = lat.bin5)) +
+  geom_boxplot(position ="dodge2") +
+  geom_hline(yintercept = 0, linetype = 2) +
+  ylim(-7,7) +
+  xlab("Years Since Fire") +
+  ylab(expression(paste("Radiative Forcing W",m^-2,sep=""))) +
+  ggtitle("July") +
+  labs(fill = "Latitude") +
+  scale_fill_manual(values = cl,
+                    labels = c("55-60", "60-65", "65-70")) +
+  theme_bw(base_size = 16)
+
+#boxplot for march-sept
+frc.ann <- alb.frc %>%
+  na.omit() %>%
+  ggplot(aes(x = pf.bin, y=rf, fill = lat.bin5)) +
+  geom_boxplot(position ="dodge2") +
+  geom_hline(yintercept = 0, linetype = 2) +
+  ylim(-7,7) +
+  xlab("Years Since Fire") +
+  ylab(expression(paste("Radiative Forcing W",m^-2,sep=""))) +
+  ggtitle("March-Sept") +
+  labs(fill = "Latitude") +
+  scale_fill_manual(values = cl,
+                    labels = c("55-60", "60-65", "65-70")) +
+  theme_bw(base_size = 16)
+
+frc.mar + theme(legend.position = "none") + labs(tag = "a") +
+frc.jul + theme(legend.position = "none") + labs(tag = "b") +
+frc.ann +labs(tag = "c") 
+  
+ggsave("figures/postfire_radiative forcing.png",
+       width = 12, height = 4, units = "in")
+
+
+# average over all years since fire
+frc.pf <- alb.frc %>%
+  na.omit() %>%
+  ggplot(aes(x = lat.bin5, y=rf, fill = lat.bin5)) +
+  geom_boxplot(position ="dodge2") +
+  geom_hline(yintercept = 0, linetype = 2) +
+  ylim(-7,7) +
+  xlab("Years Since Fire") +
+  ylab(expression(paste("Radiative Forcing W",m^-2,sep=""))) +
+  ggtitle("Annual Radiative Forcing") +
+  labs(fill = "Latitude") +
+  scale_fill_manual(values = cl,
+                    labels = c("55-60", "60-65", "65-70")) +
+  theme_bw(base_size = 16)
+
+
+#-------------------------------------------------------------------------------------------------------------------------#
+# tree cover vs. albedo/rf figure
+#-------------------------------------------------------------------------------------------------------------------------#
+
+# need to decide how for post-fire this should be
+# could be 1-2 years, or maybe further out, since albedo keeps increasing
+tree.mar <- alb.m %>%
+  filter(month == 3 & ysf ==1) %>%
+  ggplot(aes(x = treecover2, y = d.alb, color = lat.bin5)) +
+  geom_point()
+
+
 
 #-------------------------------------------------------------------------------------------------------------------------#
 # OLD CODE
 #-------------------------------------------------------------------------------------------------------------------------#
-# make a plot that excludes southern and northern most latitudinal bins
-alb.lat.bin.bor <- alb.lat.bin %>%
-  filter(lat!="(49,55]" & lat!="(70,77]")
-
-ab <- ggplot() +
-  geom_line(data = alb.lat.bin.bor, aes(x = jday, y = albedo, color = tsf), linewidth = 0.75) + 
-  scale_color_manual(values = c("red", hcl.colors(8,palette = "Blues 3",rev=T)[4:8]),
-                     labels = c("Prefire", "1", "2", "3-5", "6-10", "11-20")) +
-  theme_bw(base_size = 18) 
-
-ab + facet_wrap(vars(lat), scales = "fixed",
-               labeller = as_labeller(c("(55,60]" = "55-60",
-                                        "(60,65]" = "60-65",
-                                        "(65,70]" = "65-70"))) +
-  xlab("Julian Day") + 
-  ylab("Albedo") + 
-  labs(color = "Years\nSince\nFire")
-
-ggsave("figures/postfire_seasonal_albedo_latitude_boreal_fix.png",
-       width = 12, height = 4, units = "in")
-
-
-
-###################################################################
-# plot changes in radiative forcing post-fire
-# mean radiative forcing over March-Sept by year since fire,
-# split by latitude as well
-###################################################################
-
-# mean RF for each year year post-fire
-frc.ann <- select(frc,c(-dsf,-month,-day)) %>%
-  filter(ysf > 0) %>%
-  group_by(ysf) %>%
-  summarise(across(1:22088, ~mean(.x, na.rm = T)))
-
-# look at years, 1, 2, 3-5, and 5-10 post-fire
-b1 <- select(frc,-dsf) %>%
-  filter(2<ysf & ysf<6) %>%
-  group_by(month, day) %>%
-  summarise(across(1:22089,~mean(.x, na.rm = T))) 
-
-b2 <- select(frc,-dsf) %>%
-  filter(5<ysf & ysf<11) %>%
-  group_by(month, day) %>%
-  summarise(across(1:22089,~mean(.x, na.rm = T))) 
-
-b3 <- select(frc,-dsf) %>%
-  filter(10<ysf) %>%
-  group_by(month, day) %>%
-  summarise(across(1:22089,~mean(.x, na.rm = T))) 
-
-frc.yr <- select(frc,-dsf) %>%
-  filter(0<ysf & ysf<3) %>%
-  full_join(b1) %>%
-  full_join(b2) %>%
-  full_join(b3)
-
-rm(b1,b2,b3)
-# test using base R
-# b3 <- which(frc$ysf>2 & frc$ysf<6)
-# b4 <- whichwhich(frc$ysf>5 & frc$ysf<11)
-# b5 <- which(frc$ysf>10) 
-# tst <- aggregate(frc[b3,2:22089], by = list(frc$month[b3],frc$day[b3]), FUN = "mean", na.rm = T)
-
-
-# unique ecozones
-eco <- unique(fire$EcoCode)
-
-# get fire ids for first ecozone
-fid <- fire$UniqueId[which(fire$EcoCode == eco[1])]
-
-# create data frame with first ecozone
-frc.eco <- as.data.frame(cbind(frc.ann$ysf,
-                          rowMeans(frc.ann[,na.omit(match(fid,colnames(frc.ann)))],na.rm = T)))
-
-frc.yr.eco <- as.data.frame(cbind(frc.yr$ysf, frc.yr$month, frc.yr$day,
-                                  rowMeans(frc.yr[,na.omit(match(fid,colnames(frc.yr)))],na.rm = T)))
-# add remaining ecozones
-for( i in 2:length(eco))
-{
-  fid <- fire$UniqueId[which(fire$EcoCode == eco[i])]
-  frc.eco <- cbind(frc.eco,rowMeans(frc.ann[,na.omit(match(fid,colnames(frc.ann)))],na.rm = T))
-  frc.yr.eco <- cbind(frc.yr.eco, rowMeans(frc.yr[,na.omit(match(fid,colnames(frc.yr)))],na.rm = T))
-}
-
-# set column names
-names(frc.eco) <- c("ysf",eco)
-names(frc.yr.eco) <- c("ysf", "month", "day",eco)
-
-#---------------------------------------------------------------#
-# CALCULATE FORCING BY 5 DEGREE LATITUDINAL BANDS
-#---------------------------------------------------------------#
-l5 <- unique(fr$lat.bin5)
-
-# get fire ids for first band
-fid <- fire$UniqueId[which(fr$lat.bin5 == l5[1])]
-
-# create data frame with first ecozone
-frc.lat <- as.data.frame(cbind(frc.ann$ysf,
-                               rowMeans(frc.ann[,na.omit(match(fid,colnames(frc.ann)))],na.rm = T)))
-
-frc.yr.lat <- as.data.frame(cbind(frc.yr$ysf, frc.yr$month, frc.yr$day,
-                                  rowMeans(frc.yr[,na.omit(match(fid,colnames(frc.yr)))],na.rm = T)))
-# add remaining ecozones
-for( i in 2:length(l5))
-{
-  fid <- fire$UniqueId[which(fr$lat.bin5 == l5[i])]
-  frc.lat <- cbind(frc.lat,rowMeans(frc.ann[,na.omit(match(fid,colnames(frc.ann)))],na.rm = T))
-  frc.yr.lat <- cbind(frc.yr.lat, rowMeans(frc.yr[,na.omit(match(fid,colnames(frc.yr)))],na.rm = T))
-}
-
-# set column names
-names(frc.lat) <- c("ysf",levels(l5)[l5])
-names(frc.yr.lat) <- c("ysf", "month", "day",levels(l5)[l5])
-
-#---------------------------------------------------------------#
-# create separate data for biome/region     
-#---------------------------------------------------------------#
-# add arctic and subarctic
-fid <- fire$UniqueId[which(fire$ArcSub == "subarctic")]
-frc.reg <- as.data.frame(cbind(frc.ann$ysf,rowMeans(frc.ann[,na.omit(match(fid,colnames(frc.ann)))],na.rm = T)))
-frc.yr.reg <- as.data.frame(cbind(frc.yr$ysf,frc.yr$month, frc.yr$day,
-                                  rowMeans(frc.yr[,na.omit(match(fid,colnames(frc.ann)))],na.rm = T)))
-fid <- fire$UniqueId[which(fire$ArcSub == "arctic")]
-frc.reg <- cbind(frc.reg,rowMeans(frc.ann[,na.omit(match(fid,colnames(frc.ann)))],na.rm = T))
-frc.yr.reg <- cbind(frc.yr.reg, rowMeans(frc.yr[,na.omit(match(fid,colnames(frc.ann)))],na.rm = T))
-#add biome
-fid <- fire$UniqueId[which(fire$biome == "Boreal")]
-frc.reg <- cbind(frc.reg,rowMeans(frc.ann[,na.omit(match(fid,colnames(frc.ann)))],na.rm = T))
-frc.yr.reg <- cbind(frc.yr.reg, rowMeans(frc.yr[,na.omit(match(fid,colnames(frc.ann)))],na.rm = T))
-
-fid <- fire$UniqueId[which(fire$biome == "Tundra")]
-frc.reg <- cbind(frc.reg,rowMeans(frc.ann[,na.omit(match(fid,colnames(frc.ann)))],na.rm = T))
-frc.yr.reg <- cbind(frc.yr.reg, rowMeans(frc.yr[,na.omit(match(fid,colnames(frc.ann)))],na.rm = T))
-
-# set column names 
-names(frc.reg) <- c("ysf","subarctic", "arctic","boreal","tundra")
-names(frc.yr.reg) <- c("ysf","month","day","subarctic", "arctic","boreal","tundra")
-
-# julian day for plotting 
-# (note could do this once above, and then use it to aggregate data)
-frc.yr.eco$jday <- yday(strptime(paste(frc.yr.eco$month,frc.yr.eco$day,"2010", sep = "-"), 
-                                 format = "%m-%e-%Y", tz = ""))
-frc.yr.reg$jday <- yday(strptime(paste(frc.yr.reg$month,frc.yr.reg$day,"2010", sep = "-"), 
-                                 format = "%m-%e-%Y", tz = ""))
-frc.yr.lat$jday <- yday(strptime(paste(frc.yr.lat$month,frc.yr.lat$day,"2010", sep = "-"), 
-                                 format = "%m-%e-%Y", tz = ""))
-
-# convert year since fire bins to factor for categorical plotting
-frc.yr.eco$ysf <- factor(frc.yr.eco$ysf, levels = c("1", "2", "4", "8", "15.5"))
-frc.yr.reg$ysf <- factor(frc.yr.reg$ysf, levels = c("1", "2", "4", "8", "15.5"))
-frc.yr.lat$ysf <- factor(frc.yr.lat$ysf, levels = c("1", "2", "4", "8", "15.5"))
-
-levels(frc.yr.reg$ysf) <- c("1", "2", "3-5", "6-10", "11-20")
-levels(frc.yr.eco$ysf) <- c("1", "2", "3-5", "6-10", "11-20")
-levels(frc.yr.lat$ysf) <- c("1", "2", "3-5", "6-10", "11-20")
-# pivot data into long format
-frea <- pivot_longer(frc.eco,
-                    cols = 2:9,
-                    names_to = "eco",
-                    values_to = "rf")
-
-frey <- pivot_longer(frc.yr.eco,
-                     cols = 4:11,
-                     names_to = "eco",
-                     values_to = "rf")
-# pivot data into long format
-frrg <- pivot_longer(frc.reg,
-                     cols = 2:5,
-                     names_to = "reg",
-                     values_to = "rf")
-
-frrgy <- pivot_longer(frc.yr.reg,
-                     cols = 4:7,
-                     names_to = "reg",
-                     values_to = "rf")
-# pivot data into long format
-frl <- pivot_longer(frc.lat,
-                     cols = 2:6,
-                     names_to = "lat",
-                     values_to = "rf")
-
-frly <- pivot_longer(frc.yr.lat,
-                      cols = 4:8,
-                      names_to = "lat",
-                      values_to = "rf")
-#---------------------------------------------------------------#
-colMeans(frc.lat)
-
-# plots for mean annual RF 
-# create a plot for regions
-p1 <- ggplot(data = frrg, aes(x = ysf, y = rf)) + 
-  geom_hline(yintercept = 0, linetype = "dashed",
-             color = "darkgray", size = 1) +
-  geom_line((aes(color = reg)), na.rm = T) + 
-  labs(color = "Region") +
-  xlab("Year Since Fire") +
-  ylab("Radiative Forcing") +
-  #scale_color_brewer("Dark2") +
-  theme_bw() 
-
-
-# create a plot for Ecozones
-p2 <- ggplot(data = frea, aes(x = ysf, y = rf)) + 
-  geom_hline(yintercept = 0, linetype = "dashed",
-             color = "darkgray", size = 1) +
-  geom_line((aes(color = eco)), na.rm = T) + 
-  labs(color = "Ecozone") +
-  xlab("Year Since Fire") +
-  ylab("Rediative Forcing") +
-  #scale_color_brewer("Dark2") +
-  theme_bw() 
-
-# create a plot for latitude
-p3 <- ggplot(data = frl, aes(x = ysf, y = rf)) + 
-  geom_hline(yintercept = 0, linetype = "dashed",
-             color = "darkgray", size = 1) +
-  geom_line((aes(color = lat)), na.rm = T) + 
-  labs(color = "Latitude") +
-  xlab("Year Since Fire") +
-  ylab("Rediative Forcing") +
-  #scale_color_brewer("Dark2") +
-  theme_bw() 
-#add plots to layout (patchwork package)
-p1+p2
-
-# save plot to file
-ggsave("figures/annual_rf_eco_reg.png",
-       width = 8, height = 4, units = "in")
-
 # plots for mean seasonal RF trajectories, binned by 1, 2, 3-5, 6-10, and 11-20 years post fire
 # create a multipanel plot for regions
 p <- ggplot(data = frrgy, aes(x = jday, y = rf)) + 
@@ -726,47 +626,6 @@ p <- ggplot(data = frrgy, aes(x = jday, y = rf)) +
   labs(color = "Years Since Fire") +
   #scale_color_brewer("Dark2") +
   theme_bw() 
-
-#p + scale_fill_discrete(limits = c("1", "2", "4", "8", "15.5"))
-p + facet_wrap(vars(reg), scales = "free_y") +
-  xlab("Day of Year") + ylab("Radiative Forcing")
-
-ggsave("figures/seasonal_rf_reg.png",
-       width = 8, height = 4, units = "in")
-
-# create a multipanel plot for ecozones
-p <- ggplot(data = frey, aes(x = jday, y = rf)) + 
-  geom_hline(yintercept = 0, linetype = "dashed",
-             color = "darkgray", size = 1) +
-  geom_point((aes(color = ysf)), na.rm = T) + 
-#  scale_color_brewer(palette="Set1") +
-  labs(color = "Years Since Fire") +
-  #scale_color_brewer("Dark2") +
-  theme_bw() 
-
-#p + scale_fill_discrete(limits = c("1", "2", "4", "8", "15.5"))
-p + facet_wrap(vars(eco), scales = "free_y") +
-    xlab("Day of Year") + 
-    ylab(expression(paste("Radiative Forcing W",m^-2,sep="")))
-
-ggsave("figures/seasonal_rf_eco.png",
-       width = 8, height = 4, units = "in")
-
-# create a multipanel plot for latitudes
-p <- ggplot(data = frly, aes(x = jday, y = rf)) + 
-  geom_hline(yintercept = 0, linetype = "dashed",
-             color = "darkgray", size = 1) +
-  geom_point((aes(color = ysf)), na.rm = T) + 
-  #  scale_color_brewer(palette="Set1") +
-  labs(color = "Years Since Fire") +
-  #scale_color_brewer("Dark2") +
-  theme_bw() 
-
-#p + scale_fill_discrete(limits = c("1", "2", "4", "8", "15.5"))
-p + facet_wrap(vars(lat), scales = "free_y") +
-  xlab("Day of Year") + 
-  ylab(expression(paste("Radiative Forcing W",m^-2,sep="")))
-
 #--------------------------------------------------#
 # boxplot of annual rf by lat bins and time since fire
 #--------------------------------------------------#
