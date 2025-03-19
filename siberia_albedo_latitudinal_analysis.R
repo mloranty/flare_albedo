@@ -534,7 +534,7 @@ frc.mar <- alb.frc %>%
   na.omit() %>%
   filter(month == 3) %>%
   ggplot(aes(x = pf.bin, y=rf, fill = lat.bin5)) +
-  geom_boxplot(position ="dodge2") +
+  geom_boxplot(notch = TRUE, outlier.shape = NA, position ="dodge2") +
   geom_hline(yintercept = 0, linetype = 2) +
   ylim(-7,7) +
   xlab("Years Since Fire") +
@@ -550,7 +550,7 @@ frc.jul <- alb.frc %>%
   na.omit() %>%
   filter(month == 7) %>%
   ggplot(aes(x = pf.bin, y=rf, fill = lat.bin5)) +
-  geom_boxplot(position ="dodge2") +
+  geom_boxplot(notch = TRUE, outlier.shape = NA,position ="dodge2") +
   geom_hline(yintercept = 0, linetype = 2) +
   ylim(-7,7) +
   xlab("Years Since Fire") +
@@ -565,7 +565,7 @@ frc.jul <- alb.frc %>%
 frc.ann <- alb.frc %>%
   na.omit() %>%
   ggplot(aes(x = pf.bin, y=rf, fill = lat.bin5)) +
-  geom_boxplot(position ="dodge2") +
+  geom_boxplot(notch = TRUE, outlier.shape = NA,position ="dodge2") +
   geom_hline(yintercept = 0, linetype = 2) +
   ylim(-7,7) +
   xlab("Years Since Fire") +
@@ -599,6 +599,16 @@ frc.pf <- alb.frc %>%
                     labels = c("55-60", "60-65", "65-70")) +
   theme_bw(base_size = 16)
 
+# calculate forcing across time period by lat bins
+frc.lat <- alb.frc %>%
+  ungroup() %>%
+  select(ysf, month, lat.bin5, rf) %>%
+  group_by(ysf, month, lat.bin5) %>%
+  mutate(rf = mean(rf, na.rm = T)) %>%
+  ungroup() %>%
+  group_by(lat.bin5) %>%
+  select(lat.bin5, rf) %>%
+  mutate(rf = mean(rf, na.rm = T))
 
 #-------------------------------------------------------------------------------------------------------------------------#
 # tree cover vs. albedo/rf figure
@@ -608,10 +618,19 @@ frc.pf <- alb.frc %>%
 # could be 1-2 years, or maybe further out, since albedo keeps increasing
 tree.mar <- alb.m %>%
   filter(month == 3 & ysf ==1) %>%
-  ggplot(aes(x = treecover2, y = d.alb, color = lat.bin5)) +
-  geom_point()
+  ggplot(aes(x = treecover2, y = d.alb/1000, color = lat.bin5)) +
+    geom_point(, alpha = 0.5) +
+    ylim(-0.2,0.2) +
+    xlab("Canopy Cover (%)") +
+    ylab("Albedo Change") +
+    ggtitle("March") +
+    labs(color = "Latitude") +
+    scale_color_manual(values = cl,
+                      labels = c("55-60", "60-65", "65-70")) +
 
-
+  alb.m %>%
+  filter(month == 3 & ysf ==1) %>%
+  lm(d.alb/1000~treecover2,)
 
 #-------------------------------------------------------------------------------------------------------------------------#
 # OLD CODE
