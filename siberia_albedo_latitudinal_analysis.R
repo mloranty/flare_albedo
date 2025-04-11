@@ -85,12 +85,26 @@ bp5 <- f.lat5 %>%
                     labels = c("2001-2005","2006-2010","2011-2015","2016-2020")) +
   scale_x_discrete(labels= c("55-60", "60-65", "65-70")) +
   labs(fill = "") +
-  theme_bw(base_size = 16)
+  theme_bw(base_size = 18)
 
-bp5 + theme(#legend.position = c(0.85, 0.75),
-            legend.title=element_blank(),
-            legend.position = "top")
 ggsave("figures/area_burned_by_latitude.png",
+       width = 7, height = 4, units = "in")
+
+# alternate bar graph
+bp5 <- f.lat5 %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+  #ggplot(aes(fill=yr.bin, y=area/10^6, x=lat.bin5)) + 
+  ggplot(aes(x=yr.bin, y=area/10^6, fill=lat.bin5)) + 
+  geom_col(position="dodge") +
+  xlab("") + 
+  ylab("Area Burned (MHa)") +
+  labs(fill = "Latitude") +
+  scale_fill_manual(values = cl,
+                    labels = c("55-60", "60-65", "65-70")) +
+  scale_x_discrete(labels= c("2001-2005","2006-2010","2011-2015","2016-2020")) +
+  theme_bw(base_size = 18)
+  
+ggsave("figures/area_burned_by_latitude_year.png",
        width = 7, height = 4, units = "in")
 
 # boxplot of mean dNBR in 5 degree latitude bins
@@ -228,6 +242,19 @@ pre.7 <- pre.m %>%
 pre7.aov <- aov(pre.7$albedo/1000~pre.7$lat.bin5)
 summary(pre7.aov)
 TukeyHSD(pre7.aov)
+
+# get summary stats to report in paper
+pre.3 %>%
+  group_by(lat.bin5) %>%
+  summarise(alb = mean(albedo/1000, na.rm = T),
+            alb.sd = sd(albedo/1000, na.rm = T),
+            alb.sem = sd(albedo/1000, na.rm = T)/n()) 
+
+pre.7 %>%
+  group_by(lat.bin5) %>%
+  summarise(alb = mean(albedo/1000, na.rm = T),
+            alb.sd = sd(albedo/1000, na.rm = T),
+            alb.sem = sd(albedo/1000, na.rm = T)/n()) 
 #-------------------------------------------------------------------------------------------------------------------------#
 # plot of pre-fire albedo for each latitudinal bin
 #-------------------------------------------------------------------------------------------------------------------------#
@@ -601,14 +628,15 @@ frc.pf <- alb.frc %>%
 
 # calculate forcing across time period by lat bins
 frc.lat <- alb.frc %>%
-  ungroup() %>%
+  na.omit() %>%
   select(ysf, month, lat.bin5, rf) %>%
-  group_by(ysf, month, lat.bin5) %>%
-  mutate(rf = mean(rf, na.rm = T)) %>%
-  ungroup() %>%
+  group_by(ysf, lat.bin5) %>%
+  #group_by(ysf, month, lat.bin5) %>%
+  summarise(rf = mean(rf, na.rm = T)) %>%
   group_by(lat.bin5) %>%
-  select(lat.bin5, rf) %>%
-  mutate(rf = mean(rf, na.rm = T))
+  select(lat.bin5, ysf, rf) %>%
+  summarise(arf = mean(rf, na.rm = T), 
+            arf.sd = sd(rf, na.rm = T))
 
 #-------------------------------------------------------------------------------------------------------------------------#
 # tree cover vs. albedo/rf figure
