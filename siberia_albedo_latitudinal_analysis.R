@@ -543,7 +543,7 @@ ggsave("figures/postfire_albedo_latitude_season.png",
        width = 12, height = 8, units = "in")
 
 #-------------------------------------------------------------------------------------------------------------------------#
-# radiative forcing plots - spring, summer, and seasonal, by latitude, with ANOVA
+# radiative forcing plots - spring, summer, and seasonal, by latitude
 #-------------------------------------------------------------------------------------------------------------------------#
 # make a plot that excludes southern and northern most latitudinal bins
 
@@ -638,6 +638,56 @@ frc.lat <- alb.frc %>%
   summarise(arf = mean(rf, na.rm = T), 
             arf.sd = sd(rf, na.rm = T))
 
+
+#-------------------------------------------------------------------------------------------------------------------------#
+# summary statistics for results in manuscript. 
+#-------------------------------------------------------------------------------------------------------------------------#
+fr_summary <- fr %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+  group_by(FireYr,lat.bin5) %>%
+  summarise(burned_area = sum(SizeHa),
+            n = n()) %>%
+  pivot_wider(names_from = lat.bin5,
+              values_from = c(n, burned_area)) %>%
+  write.csv(,file = "results/fires_by_year_lat.csv", row.names = F)
+
+alb_frc_post_bin <- alb.frc %>%
+  group_by(lat.bin5,pf.bin) %>%
+  summarise(
+    alb = mean(albedo, na.rm = T),
+    alb.sd = sd(albedo, na.rm = T),
+    pre = mean(pre.alb, na.rm = T), 
+    pre.sd = sd(pre.alb, na.rm = T), 
+    alb.delt = mean(d.alb, na.rm = T),
+    alb.del.sd = sd (d.alb, na.rm = T),
+    rad.frc = mean(rf, na.rm = T), 
+    red.frc.sd = sd(rf, na.rm = T)) %>%
+  na.omit() %>%
+  mutate(alb_perc = (alb.delt/pre)*100) %>%
+  write.csv(,file = "results/albedo_rf_annual_postfire_bin.csv", row.names = F)
+    
+  
+alb_frc_post_bin_month <- alb.frc %>%
+  group_by(lat.bin5,pf.bin,month) %>%
+  summarise(
+    alb = mean(albedo, na.rm = T),
+    alb.sd = sd(albedo, na.rm = T),
+    pre = mean(pre.alb, na.rm = T), 
+    pre.sd = sd(pre.alb, na.rm = T), 
+    alb.delt = mean(d.alb, na.rm = T),
+    alb.del.sd = sd (d.alb, na.rm = T),
+    rad.frc = mean(rf, na.rm = T), 
+    red.frc.sd = sd(rf, na.rm = T)) %>%
+  na.omit() %>%
+  mutate(alb_perc = (alb.delt/pre)*100) %>%
+  write.csv(,file = "results/albedo_rf_month_postfire_bin.csv", row.names = F)
+
+
+alb_frc_post_bin_month %>%
+  group_by(lat.bin5,pf.bin) %>%
+  summarise(alb = mean(alb, na.rm = T))
+
+
 #-------------------------------------------------------------------------------------------------------------------------#
 # tree cover vs. albedo/rf figure
 #-------------------------------------------------------------------------------------------------------------------------#
@@ -660,82 +710,3 @@ tree.mar <- alb.m %>%
   filter(month == 3 & ysf ==1) %>%
   lm(d.alb/1000~treecover2,)
 
-#-------------------------------------------------------------------------------------------------------------------------#
-# OLD CODE
-#-------------------------------------------------------------------------------------------------------------------------#
-# plots for mean seasonal RF trajectories, binned by 1, 2, 3-5, 6-10, and 11-20 years post fire
-# create a multipanel plot for regions
-p <- ggplot(data = frrgy, aes(x = jday, y = rf)) + 
-  geom_hline(yintercept = 0, linetype = "dashed",
-             color = "darkgray", size = 1) +
-  geom_point((aes(color = ysf)), na.rm = T) + 
-  scale_color_brewer(palette="Set1") +
-  labs(color = "Years Since Fire") +
-  #scale_color_brewer("Dark2") +
-  theme_bw() 
-#--------------------------------------------------#
-# boxplot of annual rf by lat bins and time since fire
-#--------------------------------------------------#
-
-# maybe need to do this instead with the non-aggregated data set and aggregate to bins of ysf (1,2,3-5,6-10, etc...)
-# exclude upper and lower lat bands
-frl.bor <- frly %>%
-  filter(lat!="(49,55]" & lat!="(70,77]")
-
-bp <- ggplot(frl.bor, aes(x = ysf, y=rf, fill = lat)) +
-        geom_hline(yintercept = 0, linetype = 2) +
-        geom_boxplot(position ="dodge2") +
-   #     ylim(-7,7) +
-        xlab("Years Since Fire") +
-        ylab(expression(paste("Radiative Forcing W",m^-2,sep=""))) +
-        ggtitle("March-Sept Radiative Forcing") +
-        labs(fill = "Latitude") +
-        scale_fill_manual(values = cl,
-                          labels = c("55-60", "60-65", "65-70")) +
-        theme_bw(base_size = 16)
-
-
-ggsave("figures/annual_rf_tsf_latitude_boreal.png",
-       width = 6, height = 4, units = "in")
-
-#--------------------------------------------------#
-# boxplots of spring and summer rf by lat bins and time since fire
-#--------------------------------------------------#
-# July
-bp <- ggplot(frly[which(frly$month==7),], aes(fill=lat, x = ysf, y=rf)) +
-  geom_boxplot(position ="dodge2") +
-  ylim(-1,3) +
-  xlab("Time Since Fire (Years)") +
-  ylab(expression(paste("Radiative Forcing W",m^-2,sep=""))) +
-  labs(color = "Latitude") +
-  scale_color_manual(values = c("red", "orange", "black", "blue", "purple"),
-                     labels = c("50-55", "56-60", "61-65", "66-70", "70 <")) 
-
-ggsave("figures/july_rf_tsf_latitude.png",
-       width = 6, height = 4, units = "in")
-
-#April
-bp <- ggplot(frly[which(frly$month==4),], aes(fill=lat, x = ysf, y=rf)) +
-  geom_boxplot(position ="dodge2") +
- # ylim(-1,3) +
-  xlab("Time Since Fire (Years)") +
-  ylab(expression(paste("Radiative Forcing W",m^-2,sep=""))) +
-  labs(color = "Latitude") +
-  scale_color_manual(values = c("red", "orange", "black", "blue", "purple"),
-                     labels = c("50-55", "56-60", "61-65", "66-70", "70 <"))
-  
-  ggsave("figures/april_rf_tsf_latitude.png",
-         width = 6, height = 4, units = "in")
-  
-# March-May
-bp <- ggplot(frly[which(frly$month<6),], aes(fill=lat, x = ysf, y=rf)) +
-  geom_boxplot(position ="dodge2") +
-  ylim(-5,5) +
-  xlab("Time Since Fire (Years)") +
-  ylab(expression(paste("Radiative Forcing W",m^-2,sep=""))) +
-  labs(color = "Latitude") +
-  scale_color_manual(values = c("red", "orange", "black", "blue", "purple"),
-                     labels = c("50-55", "56-60", "61-65", "66-70", "70 <"))
-
-ggsave("figures/spring_rf_tsf_latitude.png",
-       width = 6, height = 4, units = "in")
