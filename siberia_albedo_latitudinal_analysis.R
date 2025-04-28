@@ -683,10 +683,20 @@ alb_frc_post_bin_month <- alb.frc %>%
   write.csv(,file = "results/albedo_rf_month_postfire_bin.csv", row.names = F)
 
 
-alb_frc_post_bin_month %>%
-  group_by(lat.bin5,pf.bin) %>%
-  summarise(alb = mean(alb, na.rm = T))
-
+alb_frc_post_all <-  alb.frc %>%
+  group_by(lat.bin5) %>%
+  summarise(
+    alb = mean(albedo/1000, na.rm = T),
+    alb.sd = sd(albedo/1000, na.rm = T),
+    pre = mean(pre.alb/1000, na.rm = T), 
+    pre.sd = sd(pre.alb/1000, na.rm = T), 
+    alb.delt = mean(d.alb/1000, na.rm = T),
+    alb.del.sd = sd (d.alb/1000, na.rm = T),
+    rad.frc = mean(rf, na.rm = T), 
+    red.frc.sd = sd(rf, na.rm = T)) %>%
+  na.omit() %>%
+ # mutate(alb_perc = (alb.delt/pre)*100) %>%
+  write.csv(,file = "results/albedo_rf_postfire_lat.csv", row.names = F)
 
 #-------------------------------------------------------------------------------------------------------------------------#
 # tree cover vs. albedo/rf figure
