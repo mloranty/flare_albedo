@@ -137,7 +137,7 @@ ggsave("figures/canopy_cover_by_latitude.png",
        width = 6, height = 4, units = "in")
 ###################################################################
 #-------------------------------------------------------------------------------------------------------------------------#
-# prepare data for plotting
+# prepare data for analysis and plotting
 #-------------------------------------------------------------------------------------------------------------------------#
 
 # calculate pre-fire albedo
@@ -284,7 +284,7 @@ ggsave("figures/prefire_albedo_by_latitude.png",
 
 cc + labs(tag = "a") + pre.alb.lat + labs(title = "", tag = "b") 
 
-ggsave("figures/prefire_treecover_albedo.png",
+ggsave("figures/FIGURE_2.png",
        width = 8, height = 4, units = "in")
 #-------------------------------------------------------------------------------------------------------------------------#
 # plot postfire delta albedo by latitude band  for march, july, and march-sept
@@ -410,9 +410,11 @@ alb.ann.plot <- alb.m %>%
                      labels = c("55-60", "60-65", "65-70")) +
   theme_bw(base_size = 18)
 
-alb.mar.plot+ theme(legend.position = "none") +alb.jul.plot + theme(legend.position = "none") + alb.ann.plot
+alb.mar.plot+ theme(legend.position = "none") + labs(tag = "a") +
+  alb.jul.plot + theme(legend.position = "none") + labs(tag = "b") +
+  alb.ann.plot + labs(tag = "c")
 
-ggsave("figures/postfire_albedo_annual_latitude_boreal.png",
+ggsave("figures/FIGURE_3.png",
        width = 12, height = 4, units = "in")
 
 #-------------------------------------------------------------------------------------------------------------------------#
@@ -476,9 +478,11 @@ p.alb.ann.plot <- alb.m %>%
                      labels = c("55-60", "60-65", "65-70")) +
   theme_bw(base_size = 18)
 
-p.alb.mar.plot+ theme(legend.position = "none") + p.alb.jul.plot + theme(legend.position = "none") + p.alb.ann.plot
+p.alb.mar.plot+ theme(legend.position = "none") + labs(tag = "a") +
+  p.alb.jul.plot + theme(legend.position = "none") + labs(tag = "b") +
+  p.alb.ann.plot +labs(tag = "c") 
 
-ggsave("figures/pre_postfire_albedo_annual_latitude_boreal.png",
+ggsave("figures/FIGURE_3.png",
        width = 12, height = 4, units = "in")
 
 #-------------------------------------------------------------------------------------------------------------------------#
@@ -534,13 +538,14 @@ alb.pfp.hi <- alb.pf.bin %>%
 
 alb.pfp.low + theme(legend.position = "none") + 
 alb.pfp.mid + theme(legend.position = "none") + 
-alb.pfp.hi +
-p.alb.mar.plot + theme(legend.position = "none") + labs(tag = "d") + 
-p.alb.jul.plot + theme(legend.position = "none") + labs(tag = "e") + 
-p.alb.ann.plot + labs(tag = "f") 
+alb.pfp.hi 
+  
+# p.alb.mar.plot + theme(legend.position = "none") + labs(tag = "d") + 
+# p.alb.jul.plot + theme(legend.position = "none") + labs(tag = "e") + 
+# p.alb.ann.plot + labs(tag = "f") 
 
-ggsave("figures/postfire_albedo_latitude_season.png",
-       width = 12, height = 8, units = "in")
+ggsave("figures/postfire_albedo_seasonal_albedo_trajectories.png",
+       width = 12, height = 4, units = "in")
 
 #-------------------------------------------------------------------------------------------------------------------------#
 # radiative forcing plots - spring, summer, and seasonal, by latitude
@@ -607,7 +612,7 @@ frc.mar + theme(legend.position = "none") + labs(tag = "a") +
 frc.jul + theme(legend.position = "none") + labs(tag = "b") +
 frc.ann +labs(tag = "c") 
   
-ggsave("figures/postfire_radiative forcing.png",
+ggsave("figures/FIGURE_4.png",
        width = 12, height = 4, units = "in")
 
 
@@ -625,6 +630,27 @@ frc.pf <- alb.frc %>%
   scale_fill_manual(values = cl,
                     labels = c("55-60", "60-65", "65-70")) +
   theme_bw(base_size = 16)
+
+
+# mean CACK values by lat bin
+cack <- alb.frc %>%
+  ungroup %>%
+  na.omit() %>%
+  select(UniqueId,lat.bin5,frc.cack) %>%
+  distinct() %>%
+  ggplot(aes(x = lat.bin5, y=frc.cack, fill = lat.bin5)) +
+  geom_boxplot(position ="dodge2") +
+# geom_hline(yintercept = 0, linetype = 2) +
+# ylim(-7,7) +
+  xlab("Latitude") +
+  ylab(expression(paste("Radiative Kernel W",m^-2,sep=""))) +
+  ggtitle("CACK Radiative Kernel") +
+  labs(fill = "Latitude") +
+  scale_fill_manual(values = cl,
+                    labels = c("55-60", "60-65", "65-70")) +
+  theme_bw(base_size = 16)
+ggsave("figures/FIGURE_S1.png",
+       width = 6, height = 4, units = "in")
 
 # calculate forcing across time period by lat bins
 frc.lat <- alb.frc %>%
@@ -698,6 +724,18 @@ alb_frc_post_all <-  alb.frc %>%
  # mutate(alb_perc = (alb.delt/pre)*100) %>%
   write.csv(,file = "results/albedo_rf_postfire_lat.csv", row.names = F)
 
+# write table of cack values by month and latitude
+cack <- alb.frc %>%
+  ungroup %>%
+  na.omit() %>%
+  select(UniqueId,month,lat.bin5,frc.cack) %>%
+  distinct() %>%
+  group_by(month, lat.bin5) %>%
+  summarise(mean = mean(frc.cack, na.rm = T),
+            sd = sd(frc.cack, na.rm = T)) %>%
+  pivot_wider(names_from = lat.bin5,
+              values_from = c(mean,sd)) %>%
+write.csv(,file = "results/cack_month_lat.csv", row.names = F)
 #-------------------------------------------------------------------------------------------------------------------------#
 # tree cover vs. albedo/rf figure
 #-------------------------------------------------------------------------------------------------------------------------#
