@@ -472,7 +472,7 @@ p.alb.ann.plot <- alb.m %>%
   geom_vline(xintercept = 0, linetype = 2) +
   xlab("Years Since Fire") + 
   ylab("Albedo") + 
-  ggtitle("Mar-Sept") +
+  ggtitle("March-Sept") +
   labs(color = "Latitude") +
   scale_color_manual(values = cl,
                      labels = c("55-60", "60-65", "65-70")) +
@@ -615,7 +615,17 @@ frc.ann +labs(tag = "c")
 ggsave("figures/FIGURE_4.png",
        width = 12, height = 4, units = "in")
 
+# albedo and RF figures combined #
+#-------------------------------------------------------------------#
+p.alb.mar.plot+ theme(legend.position = "none") + labs(tag = "a") +
+p.alb.jul.plot + theme(legend.position = "none") + labs(tag = "b") +
+p.alb.ann.plot +labs(tag = "c") +
+frc.mar + theme(legend.position = "none") + labs(tag = "d") +
+frc.jul + theme(legend.position = "none") + labs(tag = "e") +
+frc.ann +labs(tag = "f") 
 
+ggsave("figures/FIGURE_3+4.png",
+       width = 12, height = 8, units = "in")
 # average over all years since fire
 frc.pf <- alb.frc %>%
   na.omit() %>%
@@ -666,7 +676,7 @@ frc.lat <- alb.frc %>%
 
 
 #-------------------------------------------------------------------------------------------------------------------------#
-# summary statistics for results in manuscript. 
+# summary statistics for supplemental results. 
 #-------------------------------------------------------------------------------------------------------------------------#
 fr_summary <- fr %>%
   filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
