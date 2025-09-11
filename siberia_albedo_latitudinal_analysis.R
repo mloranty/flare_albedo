@@ -122,7 +122,7 @@ ggsave("figures/dnbr_by_latitude.png",
 
 # boxplot of mean canopy cover in 5 degree latitude bins
 cc <- fr %>%
-  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
+  filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]" & biome!="Tundra") %>%
   ggplot(aes(x=lat.bin5, y=treecover2)) + #larch_perc
   geom_boxplot(notch = TRUE, outlier.shape = NA, fill = cl) +
   # coord_cartesian(ylim = quantile(f$dnbr/100, c(0.05, 0.95))) +
