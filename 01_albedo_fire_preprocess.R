@@ -12,7 +12,8 @@ rm (list=ls())
 library(terra)
 library(lubridate)
 library(tidyverse)
-#library(ncdf4)
+library(tidyterra)
+library(ncdf4)
 
 # set working directory with options for Mac or PC workstations
 ifelse(Sys.info()[1]=="Windows",
@@ -60,11 +61,14 @@ for(i in 1:length(d))
 rm(d,n,r)
 
 # read CACK radiative kernel data set
-# transpose and correct longitude values as well
-rf <- rotate(t(rast("data/CACKv1.0/CACKv1.0.nc", "CACK")))
+# transpose, flip and correct longitude values as well
+rf <- rotate(
+              t(
+                flip(
+                  rast("data/CACKv1.0/CACKv1.0.nc", subds = c("CACK CM", "Sigma_total CM")), direction = "vertical")))
 # correct set latitude to correct extent
 ext(rf) <- c(-180,180,-90,90)
-#crs(rf) <- "EPSG:4326"
+crs(rf) <- "EPSG:4326"
 # reproject fire to lat/lon in order to extract CACK data
 f2 <- project(fire,"EPSG:4326") 
 #f3 <- terra::project(rf,fire)
@@ -79,12 +83,29 @@ fire <- merge(fire, frf)
 # larch is percent larch pixels in fire perimeter based on ESA CCI
 # both data sets provided by E. Webb, extracted in GEE
 tree <- read.csv("data/fires_treecover_larch.csv", header = T)
+tree2 <- read.csv("data/fires_tree_cover.csv", header = T)[,2:6]
 
+t <- merge(tree,tree2)
 # merger tree data with fire database
-fire <- merge(fire, tree)
+fire <- merge(fire, t)
 
-# write updated shapefile
-writeVector(fire, "data/SiberiaFires2001-2020/SiberiaFires2001-2020updated_tree.shp", overwrite = T)
+# assign pre-fire tree cover based on new vcf data
+fire$f5 <- round(fire$FireYr/5)*5
+
+fire <- fire |>
+  mutate(tree_prefire = case_when(
+    f5 == 2000 ~ treecover_2000,
+    f5 == 2005 ~ treecover_2005,
+    f5 == 2010 ~ treecover_2010,
+    f5 > 2010 ~ treecover_2015
+  ))
+
+# remove the ID category - it contains duplicates
+fire$FID <- NULL
+fire$f5 <- NULL
+
+# write updated file to geopackage
+writeVector(fire, "data/SiberiaFires2001-2020updated_tree.gpkg", overwrite = T)
 
 # get locations of Retrogressive Thaw Slumps from Runge et al 2022
 # not this is not included in analysis
@@ -111,12 +132,12 @@ writeVector(fire, "data/SiberiaFires2001-2020/SiberiaFires2001-2020updated_tree.
 ####################################################################
 
 # read updated fire shapefile with CACK and tree cover data
-fire <- vect("data/SiberiaFires2001-2020/SiberiaFires2001-2020updated_tree.shp")
+fire <- vect("data/SiberiaFires2001-2020updated_tree.gpkg")
 #convert attributes to data frame 
 fr <- as.data.frame(fire)
 #--------------------------------------------------------------------------#
 #--------------------------------------------------------------------------#
-# READ AND PROCESS MODIS ALBEDO DATA FORE EACH FIRE PERIMETER
+# READ AND PROCESS MODIS ALBEDO DATA FOR EACH FIRE PERIMETER
 
 # list yearly albedo files
 af <- list.files(path = "data/albedo/", pattern = ".csv", full.names = T)
