@@ -152,6 +152,8 @@ for(i in 2:length(af))
   alb <- rbind(alb, tmp.alb)
 }
 
+rm(tmp.alb)
+
 # get date variables
 alb$year <- year(strptime(alb$date,format = "%F"))
 alb$month <- month(strptime(alb$date,format = "%F"))

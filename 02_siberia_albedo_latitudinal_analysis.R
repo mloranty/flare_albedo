@@ -16,6 +16,7 @@ library(terra)
 library(lubridate)
 library(ggplot2)
 library(tidyverse)
+library(tidyterra)
 library(patchwork)
 #library(ncdf4)
 
@@ -30,7 +31,7 @@ ifelse(Sys.info()[1]=="Windows",
 #--------------------------------------------------------------------------#
 
 # read fire polygons with tree cover and CACK attributes
-fire <- vect("data/SiberiaFires2001-2020/SiberiaFires2001-2020updated_tree.shp")
+fire <- vect("data/SiberiaFires2001-2020updated_tree.gpkg")
 
 # read tables of albedo data
 alb <- read.csv(file = "data/siberia_fire_albedo.csv", header = T)
@@ -66,7 +67,7 @@ fr <- fr %>% mutate(lat.bin5 = cut(lat.r, breaks = c(49,55,60,65,70,77)))
 # group by these bins
 f.lat5 <- fr %>%
   group_by(yr.bin, lat.bin5) %>%
-  summarise(area = sum(SizeHa), severity = mean(dnbr), tree = mean(treecover2)) %>%
+  summarise(area = sum(SizeHa), severity = mean(dnbr), tree = mean(tree_prefire)) %>%
   filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") 
 
 # calculate number of fires retained for analysis
@@ -123,7 +124,7 @@ ggsave("figures/dnbr_by_latitude.png",
 # boxplot of mean canopy cover in 5 degree latitude bins
 cc <- fr %>%
   filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]" & biome!="Tundra") %>%
-  ggplot(aes(x=lat.bin5, y=treecover2)) + #larch_perc
+  ggplot(aes(x=lat.bin5, y=tree_prefire)) + #larch_perc
   geom_boxplot(notch = TRUE, outlier.shape = NA, fill = cl) +
   # coord_cartesian(ylim = quantile(f$dnbr/100, c(0.05, 0.95))) +
   coord_cartesian(ylim = c(0, 100)) +
@@ -151,7 +152,7 @@ pre.m <- pre %>%
   group_by(UniqueId, month) %>%
   summarise(albedo = mean(pre.alb, na.rm = T)) %>%
   mutate(ysf = -1) %>%
-  full_join(select(fr,c("UniqueId","dnbr","lat.bin5","treecover2")), by = "UniqueId") %>%
+  full_join(select(fr,c("UniqueId","dnbr","lat.bin5","tree_prefire")), by = "UniqueId") %>%
   filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]")
 
 # get cack kernal values for rf calcs
@@ -159,7 +160,7 @@ frc <- fr %>%
   select(UniqueId,starts_with("CACK")) %>%
   pivot_longer(cols = starts_with("CACK"),
                names_to = "month",
-               names_prefix = "CACK_CM_",
+               names_prefix = "CACK.CM_Month.",
                names_transform = list(month = as.integer),
                values_to = "frc.cack") %>%
   filter(month < 10 & month > 2)
@@ -168,7 +169,7 @@ frc <- fr %>%
 alb.all <- alb %>%
   select(-X) %>% 
   full_join(pre) %>%
-  full_join(select(fr,c("UniqueId","dnbr","lat.bin5","treecover2")), by = "UniqueId") %>%
+  full_join(select(fr,c("UniqueId","dnbr","lat.bin5","tree_prefire")), by = "UniqueId") %>%
   filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]")
 
 # add post-fire bins
@@ -198,7 +199,7 @@ alb.m <- select(alb.all, c("UniqueId", "albedo", "pre.alb", "month", "day", "ysf
   summarise(albedo = mean(albedo, na.rm = T),
             pre.alb = mean(pre.alb, na.rm = T),
             d.alb = mean(d.alb, na.rm = T)) %>%
-  full_join(select(fr,c("UniqueId","dnbr","lat.bin5","treecover2")), by = "UniqueId")
+  full_join(select(fr,c("UniqueId","dnbr","lat.bin5","tree_prefire")), by = "UniqueId")
 
 #-------------------------------------------------------------------------------------------------------------------------#
 # calculate summaries for pre-fire tree cover and albedo and perform ANOVAs
@@ -208,9 +209,9 @@ alb.m <- select(alb.all, c("UniqueId", "albedo", "pre.alb", "month", "day", "ysf
 cc.tbl <- fr %>%
   filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
   group_by(lat.bin5) %>%
-  summarise(tree = mean(treecover2, na.rm = T),
-            tree.sd = sd(treecover2, na.rm = T),
-            tree.sem = sd(treecover2, na.rm = T)/n()) %>%
+  summarise(tree = mean(tree_prefire, na.rm = T),
+            tree.sd = sd(tree_prefire, na.rm = T),
+            tree.sem = sd(tree_prefire, na.rm = T)/n()) %>%
   write.csv(,file = "results/tree_cover_summary.csv")
 
 # tree cover by latitude ANOVA
@@ -262,14 +263,14 @@ sz <- 1.5
 cl <- c("#fde725", "#21918c", "#440154")
 
 pre.alb.lat <- pre %>%
-  full_join(select(fr,c("UniqueId","dnbr","lat.bin5","treecover2")), by = "UniqueId") %>%
+  full_join(select(fr,c("UniqueId","dnbr","lat.bin5","tree_prefire")), by = "UniqueId") %>%
   group_by(jday, lat.bin5) %>%
   summarise(alb = mean(pre.alb, na.rm = T),
             stdev = sd(pre.alb, na.rm = T)) %>%
   filter(lat.bin5!="(49,55]" & lat.bin5!="(70,77]") %>%
   ggplot(aes(x = jday, y = alb/1000, color = lat.bin5)) + 
   geom_point(size = sz) +
-  geom_line(size = sz) +
+  geom_line(linewidth= sz) +
   #geom_ribbon(aes(ymax = (alb+stdev)/1000, ymin = (alb-stdev)/1000), alpha = 0.1, fill = "gray") 
   xlab("Day of Year") + 
   ylab("Albedo") + 
