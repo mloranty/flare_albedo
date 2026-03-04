@@ -53,51 +53,9 @@ m.temp <- tapp(temp,
 # calculate zonal mean temp, convert from k to c, and add to dataframe
 clim.sum$temp_C <- t(zonal(m.temp, fire, fun = "mean", na.rm = T)-273.15)
 
-# 2. Snow Depth
-#subset by variable and year
-sub <- clim[[which(names(clim)==vars[2])]] 
-temp <- sub[[which(year(time(sub))< 2021)]]
+# annual mean
+mean(clim.sum$temp_C)
 
-#ggregate to monthly
-m.temp <- tapp(temp, 
-               index = month(time(temp)),
-               fun = mean, na.rm = T)
-
-# calculate zonal mean temp, convert from m to cm, and add to dataframe
-clim.sum$snw_cm <- t(zonal(m.temp, fire, fun = "mean", na.rm = T)*100)
-
-# 3. Snow Water Equivalent
-#subset by variable and year
-sub <- clim[[which(names(clim)==vars[3])]] 
-temp <- sub[[which(year(time(sub))< 2021)]]
-
-#ggregate to monthly
-m.temp <- tapp(temp, 
-               index = month(time(temp)),
-               fun = mean, na.rm = T)
-
-# calculate zonal mean temp, convert from m to cm, and add to dataframe
-clim.sum$swe_cm <- t(zonal(m.temp, fire, fun = "mean", na.rm = T)*100)
-
-# 4. Precip
-#subset by variable and year
-sub <- clim[[which(names(clim)==vars[4])]] 
-temp <- sub[[which(year(time(sub))< 2021)]]
-
-#ggregate to monthly
-m.temp <- tapp(temp, 
-               index = month(time(temp)),
-               fun = mean, na.rm = T)
-
-# calculate zonal mean precip, convert from m to cm, and add to dataframe
-clim.sum$prcp_cm <- t(zonal(m.temp, fire, fun = "mean", na.rm = T)*100*30)
-
-
-terra::extract(m.temp,chy)*100
-chy <- vect(matrix(c(161.3508, 68.7427), ncol=2), crs="EPSG:4326")
-yak <- vect(matrix(c(129.7422, 62.0397), ncol=2), crs="EPSG:4326")
-
-yak <- c(62.0397, 129.7422)
 # API code documenting the data request from Climate Data Store
 
 # import cdsapi
